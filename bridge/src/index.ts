@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * nanobot WhatsApp Bridge
+ * comobot WhatsApp Bridge
  * 
- * This bridge connects WhatsApp Web to nanobot's Python backend
+ * This bridge connects WhatsApp Web to comobot's Python backend
  * via WebSocket. It handles authentication, message forwarding,
  * and reconnection logic.
  * 
@@ -10,7 +10,7 @@
  *   npm run build && npm start
  *   
  * Or with custom settings:
- *   BRIDGE_PORT=3001 AUTH_DIR=~/.nanobot/whatsapp npm start
+ *   BRIDGE_PORT=3001 AUTH_DIR=~/.comobot/whatsapp npm start
  */
 
 // Polyfill crypto for Baileys in ESM
@@ -24,10 +24,10 @@ import { homedir } from 'os';
 import { join } from 'path';
 
 const PORT = parseInt(process.env.BRIDGE_PORT || '3001', 10);
-const AUTH_DIR = process.env.AUTH_DIR || join(homedir(), '.nanobot', 'whatsapp-auth');
+const AUTH_DIR = process.env.AUTH_DIR || join(homedir(), '.comobot', 'whatsapp-auth');
 const TOKEN = process.env.BRIDGE_TOKEN || undefined;
 
-console.log('🐈 nanobot WhatsApp Bridge');
+console.log('🐈 comobot WhatsApp Bridge');
 console.log('========================\n');
 
 const server = new BridgeServer(PORT, AUTH_DIR, TOKEN);

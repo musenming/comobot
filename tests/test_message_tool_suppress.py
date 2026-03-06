@@ -5,18 +5,20 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from nanobot.agent.loop import AgentLoop
-from nanobot.agent.tools.message import MessageTool
-from nanobot.bus.events import InboundMessage, OutboundMessage
-from nanobot.bus.queue import MessageBus
-from nanobot.providers.base import LLMResponse, ToolCallRequest
+from comobot.agent.loop import AgentLoop
+from comobot.agent.tools.message import MessageTool
+from comobot.bus.events import InboundMessage, OutboundMessage
+from comobot.bus.queue import MessageBus
+from comobot.providers.base import LLMResponse, ToolCallRequest
 
 
 def _make_loop(tmp_path: Path) -> AgentLoop:
     bus = MessageBus()
     provider = MagicMock()
     provider.get_default_model.return_value = "test-model"
-    return AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="test-model", memory_window=10)
+    return AgentLoop(
+        bus=bus, provider=provider, workspace=tmp_path, model="test-model", memory_window=10
+    )
 
 
 class TestMessageToolSuppressLogic:
@@ -26,13 +28,16 @@ class TestMessageToolSuppressLogic:
     async def test_suppress_when_sent_to_same_target(self, tmp_path: Path) -> None:
         loop = _make_loop(tmp_path)
         tool_call = ToolCallRequest(
-            id="call1", name="message",
+            id="call1",
+            name="message",
             arguments={"content": "Hello", "channel": "feishu", "chat_id": "chat123"},
         )
-        calls = iter([
-            LLMResponse(content="", tool_calls=[tool_call]),
-            LLMResponse(content="Done", tool_calls=[]),
-        ])
+        calls = iter(
+            [
+                LLMResponse(content="", tool_calls=[tool_call]),
+                LLMResponse(content="Done", tool_calls=[]),
+            ]
+        )
         loop.provider.chat = AsyncMock(side_effect=lambda *a, **kw: next(calls))
         loop.tools.get_definitions = MagicMock(return_value=[])
 
@@ -51,13 +56,20 @@ class TestMessageToolSuppressLogic:
     async def test_not_suppress_when_sent_to_different_target(self, tmp_path: Path) -> None:
         loop = _make_loop(tmp_path)
         tool_call = ToolCallRequest(
-            id="call1", name="message",
-            arguments={"content": "Email content", "channel": "email", "chat_id": "user@example.com"},
+            id="call1",
+            name="message",
+            arguments={
+                "content": "Email content",
+                "channel": "email",
+                "chat_id": "user@example.com",
+            },
         )
-        calls = iter([
-            LLMResponse(content="", tool_calls=[tool_call]),
-            LLMResponse(content="I've sent the email.", tool_calls=[]),
-        ])
+        calls = iter(
+            [
+                LLMResponse(content="", tool_calls=[tool_call]),
+                LLMResponse(content="I've sent the email.", tool_calls=[]),
+            ]
+        )
         loop.provider.chat = AsyncMock(side_effect=lambda *a, **kw: next(calls))
         loop.tools.get_definitions = MagicMock(return_value=[])
 
@@ -66,7 +78,9 @@ class TestMessageToolSuppressLogic:
         if isinstance(mt, MessageTool):
             mt.set_send_callback(AsyncMock(side_effect=lambda m: sent.append(m)))
 
-        msg = InboundMessage(channel="feishu", sender_id="user1", chat_id="chat123", content="Send email")
+        msg = InboundMessage(
+            channel="feishu", sender_id="user1", chat_id="chat123", content="Send email"
+        )
         result = await loop._process_message(msg)
 
         assert len(sent) == 1
@@ -88,7 +102,6 @@ class TestMessageToolSuppressLogic:
 
 
 class TestMessageToolTurnTracking:
-
     def test_sent_in_turn_tracks_same_target(self) -> None:
         tool = MessageTool()
         tool.set_context("feishu", "chat1")

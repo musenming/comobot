@@ -1,6 +1,23 @@
+# Stage 1: Build Vue frontend
+FROM node:20-slim AS frontend-builder
+WORKDIR /app/web
+COPY web/package.json web/package-lock.json* ./
+RUN npm install
+COPY web/ ./
+RUN npm run build
+
+# Stage 2: Build WhatsApp bridge
+FROM node:20-slim AS bridge-builder
+WORKDIR /app/bridge
+COPY bridge/package.json bridge/package-lock.json* ./
+RUN npm install
+COPY bridge/ ./
+RUN npm run build
+
+# Stage 3: Final image
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
-# Install Node.js 20 for the WhatsApp bridge
+# Install Node.js 20 runtime only (no build tools)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl ca-certificates gnupg git && \
     mkdir -p /etc/apt/keyrings && \
@@ -16,25 +33,30 @@ WORKDIR /app
 
 # Install Python dependencies first (cached layer)
 COPY pyproject.toml README.md LICENSE ./
-RUN mkdir -p nanobot bridge && touch nanobot/__init__.py && \
+RUN mkdir -p comobot bridge && touch comobot/__init__.py && \
     uv pip install --system --no-cache . && \
-    rm -rf nanobot bridge
+    rm -rf comobot bridge
 
-# Copy the full source and install
-COPY nanobot/ nanobot/
-COPY bridge/ bridge/
+# Copy Python source and install
+COPY comobot/ comobot/
 RUN uv pip install --system --no-cache .
 
-# Build the WhatsApp bridge
-WORKDIR /app/bridge
-RUN npm install && npm run build
-WORKDIR /app
+# Copy pre-built bridge (runtime only, no node_modules rebuild)
+COPY --from=bridge-builder /app/bridge/dist/ bridge/dist/
+COPY --from=bridge-builder /app/bridge/node_modules/ bridge/node_modules/
+COPY --from=bridge-builder /app/bridge/package.json bridge/
 
-# Create config directory
-RUN mkdir -p /root/.nanobot
+# Copy pre-built frontend into the location the app expects
+COPY --from=frontend-builder /app/web/dist/ web/dist/
+
+# Create data directory
+RUN mkdir -p /root/.comobot
+
+# Volumes for persistent data
+VOLUME ["/root/.comobot"]
 
 # Gateway default port
 EXPOSE 18790
 
-ENTRYPOINT ["nanobot"]
-CMD ["status"]
+ENTRYPOINT ["comobot"]
+CMD ["gateway"]

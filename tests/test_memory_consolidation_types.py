@@ -1,6 +1,6 @@
 """Test MemoryStore.consolidate() handles non-string tool call arguments.
 
-Regression test for https://github.com/HKUDS/nanobot/issues/1042
+Regression test for https://github.com/musenming/comobot/issues/1042
 When memory consolidation receives dict values instead of strings from the LLM
 tool call response, it should serialize them to JSON instead of raising TypeError.
 """
@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from nanobot.agent.memory import MemoryStore
-from nanobot.providers.base import LLMResponse, ToolCallRequest
+from comobot.agent.memory import MemoryStore
+from comobot.providers.base import LLMResponse, ToolCallRequest
 
 
 def _make_session(message_count: int = 30, memory_window: int = 50):
@@ -104,10 +104,12 @@ class TestMemoryConsolidationTypeHandling:
                 ToolCallRequest(
                     id="call_1",
                     name="save_memory",
-                    arguments=json.dumps({
-                        "history_entry": "[2026-01-01] User discussed testing.",
-                        "memory_update": "# Memory\nUser likes testing.",
-                    }),
+                    arguments=json.dumps(
+                        {
+                            "history_entry": "[2026-01-01] User discussed testing.",
+                            "memory_update": "# Memory\nUser likes testing.",
+                        }
+                    ),
                 )
             ],
         )

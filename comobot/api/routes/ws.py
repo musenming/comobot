@@ -1,0 +1,226 @@
+"""WebSocket endpoints for real-time log streaming, status updates, and chat."""
+
+import asyncio
+import uuid
+
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
+from comobot.db.connection import Database
+
+router = APIRouter()
+
+
+class ConnectionManager:
+    """Manages WebSocket connections for broadcasting."""
+
+    def __init__(self):
+        self.log_connections: list[WebSocket] = []
+        self.status_connections: list[WebSocket] = []
+
+    async def connect_logs(self, ws: WebSocket):
+        await ws.accept()
+        self.log_connections.append(ws)
+
+    async def connect_status(self, ws: WebSocket):
+        await ws.accept()
+        self.status_connections.append(ws)
+
+    def disconnect_logs(self, ws: WebSocket):
+        if ws in self.log_connections:
+            self.log_connections.remove(ws)
+
+    def disconnect_status(self, ws: WebSocket):
+        if ws in self.status_connections:
+            self.status_connections.remove(ws)
+
+    async def broadcast_log(self, data: dict):
+        disconnected = []
+        for ws in self.log_connections:
+            try:
+                await ws.send_json(data)
+            except Exception:
+                disconnected.append(ws)
+        for ws in disconnected:
+            self.disconnect_logs(ws)
+
+    async def broadcast_status(self, data: dict):
+        disconnected = []
+        for ws in self.status_connections:
+            try:
+                await ws.send_json(data)
+            except Exception:
+                disconnected.append(ws)
+        for ws in disconnected:
+            self.disconnect_status(ws)
+
+
+manager = ConnectionManager()
+
+
+@router.websocket("/ws/logs")
+async def ws_logs(websocket: WebSocket):
+    """Real-time log streaming via WebSocket."""
+    await manager.connect_logs(websocket)
+    try:
+        # Send initial recent logs
+        db: Database = websocket.app.state.db
+        recent = await db.fetchall("SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT 50")
+        if recent:
+            for row in reversed(recent):
+                await websocket.send_json(dict(row))
+
+        # Keep connection alive and relay new logs
+        while True:
+            # Wait for client messages (ping/pong keepalive)
+            try:
+                await asyncio.wait_for(websocket.receive_text(), timeout=30)
+            except asyncio.TimeoutError:
+                # Send ping to keep alive
+                await websocket.send_json({"type": "ping"})
+    except WebSocketDisconnect:
+        manager.disconnect_logs(websocket)
+    except Exception:
+        manager.disconnect_logs(websocket)
+
+
+@router.websocket("/ws/status")
+async def ws_status(websocket: WebSocket):
+    """Real-time agent/channel status updates."""
+    await manager.connect_status(websocket)
+    try:
+        # Send initial status
+        await websocket.send_json(
+            {
+                "type": "status",
+                "agent": "online",
+                "channels": {},
+            }
+        )
+
+        while True:
+            try:
+                await asyncio.wait_for(websocket.receive_text(), timeout=30)
+            except asyncio.TimeoutError:
+                await websocket.send_json({"type": "ping"})
+    except WebSocketDisconnect:
+        manager.disconnect_status(websocket)
+    except Exception:
+        manager.disconnect_status(websocket)
+
+
+@router.websocket("/ws/chat")
+async def ws_chat(websocket: WebSocket):
+    """WebSocket endpoint for real-time chat with the agent."""
+    await websocket.accept()
+    db: Database = websocket.app.state.db
+
+    try:
+        while True:
+            raw = await websocket.receive_json()
+            msg_type = raw.get("type", "message")
+
+            if msg_type == "message":
+                content = raw.get("content", "").strip()
+                session_key = raw.get("session_key") or f"web:{uuid.uuid4().hex[:12]}"
+
+                if not content:
+                    await websocket.send_json({"type": "error", "error": "Empty message"})
+                    continue
+
+                # Ensure session exists
+                session = await db.fetchone(
+                    "SELECT id FROM sessions WHERE session_key = ?", (session_key,)
+                )
+                if not session:
+                    await db.execute(
+                        "INSERT INTO sessions (session_key) VALUES (?)", (session_key,)
+                    )
+                    session = await db.fetchone(
+                        "SELECT id FROM sessions WHERE session_key = ?", (session_key,)
+                    )
+
+                # Store user message
+                await db.execute(
+                    "INSERT INTO messages (session_id, role, content) VALUES (?, 'user', ?)",
+                    (session["id"], content),
+                )
+
+                # Acknowledge receipt
+                await websocket.send_json(
+                    {
+                        "type": "ack",
+                        "session_key": session_key,
+                    }
+                )
+
+                # Try to get agent and run
+                agent = getattr(websocket.app.state, "agent", None)
+                if agent and hasattr(agent, "process_direct"):
+                    try:
+                        # Send thinking indicator
+                        await websocket.send_json(
+                            {
+                                "type": "thinking",
+                                "session_key": session_key,
+                            }
+                        )
+
+                        response = await agent.process_direct(content, session_key=session_key)
+                        response_text = response if isinstance(response, str) else str(response)
+
+                        # Store assistant message
+                        await db.execute(
+                            "INSERT INTO messages (session_id, role, content) "
+                            "VALUES (?, 'assistant', ?)",
+                            (session["id"], response_text),
+                        )
+
+                        await websocket.send_json(
+                            {
+                                "type": "response",
+                                "session_key": session_key,
+                                "content": response_text,
+                                "role": "assistant",
+                            }
+                        )
+                    except Exception as e:
+                        error_msg = f"Agent error: {e}"
+                        await websocket.send_json(
+                            {
+                                "type": "error",
+                                "session_key": session_key,
+                                "error": error_msg,
+                            }
+                        )
+                else:
+                    # No agent available, echo back as a simple response
+                    fallback = (
+                        "Agent is not currently running. "
+                        "Please start the agent with `comobot agent` first."
+                    )
+                    await db.execute(
+                        "INSERT INTO messages (session_id, role, content) "
+                        "VALUES (?, 'assistant', ?)",
+                        (session["id"], fallback),
+                    )
+                    await websocket.send_json(
+                        {
+                            "type": "response",
+                            "session_key": session_key,
+                            "content": fallback,
+                            "role": "assistant",
+                        }
+                    )
+
+            elif msg_type == "ping":
+                await websocket.send_json({"type": "pong"})
+
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+
+
+def get_ws_manager() -> ConnectionManager:
+    """Get the global WS connection manager."""
+    return manager

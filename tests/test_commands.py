@@ -5,11 +5,15 @@ from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
 
-from nanobot.cli.commands import app
-from nanobot.config.schema import Config
-from nanobot.providers.litellm_provider import LiteLLMProvider
-from nanobot.providers.openai_codex_provider import _strip_model_prefix
-from nanobot.providers.registry import find_by_model
+from comobot.cli.commands import app
+from comobot.config.schema import Config
+from comobot.providers.litellm_provider import LiteLLMProvider
+
+try:
+    from comobot.providers.openai_codex_provider import _strip_model_prefix
+except ImportError:
+    _strip_model_prefix = None
+from comobot.providers.registry import find_by_model
 
 runner = CliRunner()
 
@@ -17,11 +21,12 @@ runner = CliRunner()
 @pytest.fixture
 def mock_paths():
     """Mock config/workspace paths for test isolation."""
-    with patch("nanobot.config.loader.get_config_path") as mock_cp, \
-         patch("nanobot.config.loader.save_config") as mock_sc, \
-         patch("nanobot.config.loader.load_config") as mock_lc, \
-         patch("nanobot.utils.helpers.get_workspace_path") as mock_ws:
-
+    with (
+        patch("comobot.config.loader.get_config_path") as mock_cp,
+        patch("comobot.config.loader.save_config") as mock_sc,
+        patch("comobot.config.loader.load_config"),
+        patch("comobot.utils.helpers.get_workspace_path") as mock_ws,
+    ):
         base_dir = Path("./test_onboard_data")
         if base_dir.exists():
             shutil.rmtree(base_dir)
@@ -49,7 +54,7 @@ def test_onboard_fresh_install(mock_paths):
     assert result.exit_code == 0
     assert "Created config" in result.stdout
     assert "Created workspace" in result.stdout
-    assert "nanobot is ready" in result.stdout
+    assert "comobot is ready" in result.stdout
     assert config_file.exists()
     assert (workspace_dir / "AGENTS.md").exists()
     assert (workspace_dir / "memory" / "MEMORY.md").exists()
@@ -125,6 +130,7 @@ def test_litellm_provider_canonicalizes_github_copilot_hyphen_prefix():
     assert resolved == "github_copilot/gpt-5.3-codex"
 
 
+@pytest.mark.skipif(_strip_model_prefix is None, reason="oauth-cli-kit not installed")
 def test_openai_codex_strip_prefix_supports_hyphen_and_underscore():
     assert _strip_model_prefix("openai-codex/gpt-5.1-codex") == "gpt-5.1-codex"
     assert _strip_model_prefix("openai_codex/gpt-5.1-codex") == "gpt-5.1-codex"

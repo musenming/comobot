@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+.Python
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Type checking
+.mypy_cache/
+.ruff_cache/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Node (bridge)
+node_modules/
+bridge/dist/
+bridge/*.js
+bridge/*.js.map
+bridge/*.d.ts
+!bridge/src/
+!bridge/tsconfig.json
+!bridge/package.json
+
+# Logs
+*.log
+logs/
+
+# Runtime data
+*.pid
+*.seed

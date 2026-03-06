@@ -3,16 +3,18 @@ x-common-config: &common-config
     context: .
     dockerfile: Dockerfile
   volumes:
-    - ~/.nanobot:/root/.nanobot
+    - comobot-data:/root/.comobot
+  env_file:
+    - .env
 
 services:
-  nanobot-gateway:
-    container_name: nanobot-gateway
+  comobot-gateway:
+    container_name: comobot-gateway
     <<: *common-config
     command: ["gateway"]
     restart: unless-stopped
     ports:
-      - 18790:18790
+      - "${COMOBOT_PORT:-18790}:18790"
     deploy:
       resources:
         limits:
@@ -21,11 +23,15 @@ services:
         reservations:
           cpus: '0.25'
           memory: 256M
-  
-  nanobot-cli:
+    stop_grace_period: 35s
+
+  comobot-cli:
     <<: *common-config
     profiles:
       - cli
     command: ["status"]
     stdin_open: true
     tty: true
+
+volumes:
+  comobot-data:
