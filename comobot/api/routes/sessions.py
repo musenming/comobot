@@ -41,24 +41,6 @@ async def list_sessions(
     return results
 
 
-@router.get("/{session_key:path}")
-async def get_session(
-    session_key: str,
-    db: Database = Depends(get_db),
-    _user: str = Depends(get_current_user),
-):
-    session = await db.fetchone("SELECT * FROM sessions WHERE session_key = ?", (session_key,))
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    result = dict(session)
-    msg_count = await db.fetchone(
-        "SELECT COUNT(*) as c FROM messages WHERE session_id = ?",
-        (session["id"],),
-    )
-    result["message_count"] = msg_count["c"] if msg_count else 0
-    return result
-
-
 @router.get("/{session_key:path}/messages")
 async def get_messages(
     session_key: str,
@@ -75,3 +57,21 @@ async def get_messages(
         "FROM messages WHERE session_id = ? ORDER BY id LIMIT ? OFFSET ?",
         (session["id"], limit, offset),
     )
+
+
+@router.get("/{session_key:path}")
+async def get_session(
+    session_key: str,
+    db: Database = Depends(get_db),
+    _user: str = Depends(get_current_user),
+):
+    session = await db.fetchone("SELECT * FROM sessions WHERE session_key = ?", (session_key,))
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    result = dict(session)
+    msg_count = await db.fetchone(
+        "SELECT COUNT(*) as c FROM messages WHERE session_id = ?",
+        (session["id"],),
+    )
+    result["message_count"] = msg_count["c"] if msg_count else 0
+    return result
