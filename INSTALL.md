@@ -1,228 +1,114 @@
-# Comobot Installation Guide
+# Comobot 安装指南
 
-## Prerequisites
+本文档分两部分：
+- **用户安装**：面向普通用户的三种安装方式
+- **打包发布**：面向开发者的打包命令与发布流程
 
-| Requirement | Version | Notes |
-|-------------|---------|-------|
-| Python | >= 3.11 | 3.11+ required; oauth-cli-kit does not support 3.10 |
-| pip | >= 22.0 | Upgraded automatically in venv |
-| Node.js | >= 18 | Required for frontend and WhatsApp bridge |
-| Git | any | For source installation |
+---
 
-## Method 1: Install from Source (Recommended for Development)
+## 用户安装
 
-### 1. Clone the repository
+### 方式一：脚本一键安装（Mac / Linux）
+
+在终端粘贴一条命令，自动完成所有依赖安装、服务启动，并在浏览器打开配置向导：
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/musenming/comobot/main/scripts/install.sh)"
+```
+
+**系统要求**：macOS 12+（Monterey）或 Ubuntu 20.04+ / CentOS 8+，需要联网
+
+脚本会自动完成：
+1. 安装 Homebrew（macOS）/ 使用 apt/yum（Linux）
+2. 安装 Python 3.11 和 Node.js 18
+3. 下载最新 Release 并解压到 `~/Applications/comobot/`（macOS）或 `~/.local/comobot/`（Linux）
+4. 创建虚拟环境并安装 Python 依赖
+5. 构建前端静态资源
+6. 配置开机自启（macOS LaunchAgent / Linux systemd）
+7. 在桌面创建快捷方式
+8. 启动服务，打开浏览器 `http://localhost:18790`
+
+---
+
+### 方式二：脚本一键安装（Windows）
+
+**方法 A**：PowerShell（推荐，Win10 1903+ / Win11）
+
+```powershell
+irm https://raw.githubusercontent.com/musenming/comobot/main/scripts/install.ps1 | iex
+```
+
+**方法 B**：下载 `install.bat`，右键 → 以管理员身份运行
+
+```
+https://raw.githubusercontent.com/musenming/comobot/main/scripts/install.bat
+```
+
+脚本会自动完成：
+1. 用 `winget` 安装 Python 3.11 和 Node.js 18
+2. 下载最新 Release 并解压到 `%APPDATA%\comobot\`
+3. 创建虚拟环境并安装依赖
+4. 构建前端静态资源
+5. 注册开机启动项（注册表）
+6. 在桌面创建快捷方式（`.lnk`）
+7. 启动服务，打开浏览器 `http://localhost:18790`
+
+---
+
+### 方式三：Docker（本地 Docker 环境）
+
+**前提**：已安装 [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+
+**macOS**：下载 `comobot-docker.zip`，解压后双击 `start.command`
+
+**Windows**：下载 `comobot-docker.zip`，解压后双击 `start.bat`
+
+或者手动执行：
+
+```bash
+# 下载编排文件
+curl -fsSL https://github.com/musenming/comobot/releases/latest/download/comobot-docker.zip -o comobot-docker.zip
+unzip comobot-docker.zip && cd comobot-docker
+
+# 启动服务（首次会拉取镜像，约 1-2 分钟）
+docker compose up -d
+
+# 查看运行状态
+docker compose ps
+
+# 打开浏览器完成向导
+open http://localhost:18790   # macOS
+# 或手动访问 http://localhost:18790
+```
+
+数据持久化在 Docker Volume `comobot-data`，重启/升级均不丢失。
+
+停止服务：
+
+```bash
+docker compose down
+```
+
+---
+
+### 方式四：源码安装（开发者）
 
 ```bash
 git clone https://github.com/musenming/comobot.git
 cd comobot
-```
 
-### 2. Create an isolated virtual environment
-
-```bash
 python3.11 -m venv .venv
-# or: python3.12 -m venv .venv
-```
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 
-### 3. Activate the virtual environment
-
-```bash
-source .venv/bin/activate
-```
-
-### 4. Upgrade pip
-
-```bash
 pip install --upgrade pip setuptools wheel
-```
-
-### 5. Install Comobot in editable mode (with dev tools)
-
-```bash
 pip install -e ".[dev]"
+
+# 构建前端
+cd web && npm install && npm run build && cd ..
+
+# 启动
+comobot gateway
 ```
 
-This installs all core dependencies plus `ruff` (linter/formatter) and `pytest` (test runner).
+---
 
-### 6. (Optional) Install Matrix channel support
-
-```bash
-pip install -e ".[matrix]"
-```
-
-### 7. Verify installation
-
-```bash
-comobot --help       # Should show CLI commands
-comobot --version    # Should print version
-```
-
-### 8. Run tests
-
-```bash
-pytest tests/ -v
-```
-
-> **Note:** `test_matrix_channel.py` requires the `[matrix]` extra. It will error if not installed.
-
-## Method 2: Install from PyPI
-
-```bash
-pip install comobot
-```
-
-## Method 3: Install with uv (fast)
-
-```bash
-uv tool install comobot
-```
-
-## Method 4: Docker
-
-### Docker Compose (recommended)
-
-```bash
-docker compose run --rm comobot-cli onboard   # First-time setup
-vim ~/.comobot/config.json                     # Add API keys
-docker compose up -d comobot-gateway           # Start gateway
-```
-
-### Docker (manual)
-
-```bash
-docker build -t comobot .
-docker run -v ~/.comobot:/root/.comobot --rm comobot onboard
-vim ~/.comobot/config.json
-docker run -v ~/.comobot:/root/.comobot -p 18790:18790 comobot gateway
-```
-
-## Post-Install Setup
-
-### 1. Initialize configuration
-
-```bash
-comobot onboard
-```
-
-This creates `~/.comobot/config.json` and `~/.comobot/workspace/`.
-
-### 2. Configure API provider
-
-Edit `~/.comobot/config.json` and add at minimum a provider API key:
-
-```json
-{
-  "providers": {
-    "openrouter": {
-      "apiKey": "sk-or-v1-xxx"
-    }
-  },
-  "agents": {
-    "defaults": {
-      "model": "anthropic/claude-opus-4-5",
-      "provider": "openrouter"
-    }
-  }
-}
-```
-
-### 3. Start chatting
-
-```bash
-comobot agent              # Interactive mode
-comobot agent -m "Hello!"  # Single message
-comobot gateway            # Start gateway (API + channels + web UI)
-```
-
-## Web Frontend
-
-The web frontend is a Vue 3 + Naive UI application in `web/`.
-
-### Production Mode
-
-The gateway serves the pre-built frontend automatically. Just build the frontend once, then start the gateway:
-
-```bash
-cd web
-npm install
-npm run build        # Outputs to web/dist/
-cd ..
-comobot gateway      # Serves frontend + API on port 18790
-```
-
-Open `http://localhost:18790` in your browser.
-
-### Development Mode (Hot Reload)
-
-For frontend development with hot reload:
-
-```bash
-# Terminal 1: Start the backend gateway
-comobot gateway                  # API on port 18790
-
-# Terminal 2: Start Vite dev server
-cd web
-npm install
-npm run dev                      # Frontend on port 5173
-```
-
-Open `http://localhost:5173` in your browser. The Vite dev server proxies `/api` and `/ws` requests to the backend automatically.
-
-| Service | Port | Description |
-|---------|------|-------------|
-| Gateway (production) | `18790` | API + built frontend (single process) |
-| Vite dev server | `5173` | Frontend with hot reload (dev only) |
-
-## Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `COMOBOT_PORT` | `18790` | Gateway HTTP port |
-| `COMOBOT_SECRET_KEY` | auto-generated | Credential encryption key |
-
-See `.env.example` for a full template.
-
-## WhatsApp Bridge Setup
-
-The WhatsApp bridge requires Node.js >= 18:
-
-```bash
-cd bridge
-npm install
-npm run build
-```
-
-Then link your device:
-
-```bash
-comobot channels login   # Scan QR with WhatsApp
-```
-
-## Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| `ModuleNotFoundError: nh3` | Install matrix extras: `pip install -e ".[matrix]"` |
-| `websockets` install fails | Ensure Python >= 3.10 |
-| `oauth-cli-kit` not found | May not be on all PyPI mirrors; install manually if needed |
-| Pre-commit hook fails | Run `ruff check . --fix && ruff format .` |
-
-## Development Commands
-
-```bash
-# Lint
-ruff check .
-
-# Auto-fix lint issues
-ruff check . --fix
-
-# Format
-ruff format .
-
-# Run tests
-pytest tests/ -v
-
-# Run a specific test
-pytest tests/test_commands.py -v
-```

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { NForm, NFormItem, NInput, NButton, NSelect, NSpace, useMessage } from 'naive-ui'
+import { NForm, NFormItem, NInput, NButton, NSelect, NSpace, NTag, NRadioGroup, NRadio, useMessage } from 'naive-ui'
 import SecretInput from '../components/SecretInput.vue'
 import api from '../api/client'
 
@@ -9,6 +9,10 @@ const router = useRouter()
 const message = useMessage()
 const currentStep = ref(1)
 const loading = ref(false)
+const validating = ref(false)
+const validateStatus = ref<'idle' | 'success' | 'error'>('idle')
+const validateMessage = ref('')
+const providerOptions = ref<Array<{ label: string; value: string; recommended: boolean; needsKey: boolean }>>([])
 
 const form = ref({
   admin_password: '',
@@ -17,18 +21,51 @@ const form = ref({
   api_key: '',
   telegram_token: '',
   telegram_mode: 'polling',
+  assistant_name: 'Comobot',
+  language: 'zh',
 })
 
-const providerOptions = [
-  { label: 'OpenAI', value: 'openai' },
-  { label: 'Anthropic (Claude)', value: 'anthropic' },
-  { label: 'DeepSeek', value: 'deepseek' },
-  { label: 'DashScope', value: 'dashscope' },
-  { label: 'Gemini', value: 'gemini' },
-  { label: 'Moonshot (Kimi)', value: 'moonshot' },
-  { label: 'Zhipu AI', value: 'zhipu' },
-  { label: 'MiniMax', value: 'minimax' },
-  { label: 'Local (Ollama)', value: 'ollama' },
+onMounted(async () => {
+  try {
+    const { data } = await api.get('/setup/providers')
+    providerOptions.value = data.map((p: any) => ({
+      label: p.name,
+      value: p.id,
+      recommended: p.recommended,
+      needs_key: p.needs_key,
+    }))
+  } catch {
+    // fallback static list
+    providerOptions.value = [
+      { label: 'OpenRouter（推荐）', value: 'openrouter', recommended: true, needsKey: true },
+      { label: 'OpenAI', value: 'openai', recommended: false, needsKey: true },
+      { label: 'Anthropic (Claude)', value: 'anthropic', recommended: false, needsKey: true },
+      { label: 'DeepSeek', value: 'deepseek', recommended: false, needsKey: true },
+      { label: 'Google Gemini', value: 'gemini', recommended: false, needsKey: true },
+      { label: '本地模型（Ollama）', value: 'ollama', recommended: false, needsKey: false },
+    ]
+  }
+})
+
+const selectOptions = computed(() =>
+  providerOptions.value.map((p) => ({
+    label: p.label + (p.recommended ? ' ⭐' : ''),
+    value: p.value,
+  }))
+)
+
+const currentProvider = computed(() =>
+  providerOptions.value.find((p) => p.value === form.value.provider)
+)
+
+const needsKey = computed(() => {
+  if (!currentProvider.value) return false
+  return (currentProvider.value as any).needs_key ?? (currentProvider.value as any).needsKey ?? true
+})
+
+const languageOptions = [
+  { label: '中文（简体）', value: 'zh' },
+  { label: 'English', value: 'en' },
 ]
 
 const passwordStrength = computed(() => {
@@ -57,6 +94,8 @@ const steps = [
   { num: 4, label: 'Done' },
 ]
 
+const accessUrl = computed(() => `http://localhost:${window.location.port || 18790}`)
+
 function nextStep() {
   if (currentStep.value === 1) {
     if (form.value.admin_password.length < 8) {
@@ -75,6 +114,31 @@ function prevStep() {
   currentStep.value--
 }
 
+function onProviderChange() {
+  validateStatus.value = 'idle'
+  validateMessage.value = ''
+}
+
+async function validateKey() {
+  if (!form.value.provider || !form.value.api_key) return
+  validating.value = true
+  validateStatus.value = 'idle'
+  validateMessage.value = ''
+  try {
+    const { data } = await api.post('/setup/validate-key', {
+      provider: form.value.provider,
+      api_key: form.value.api_key,
+    })
+    validateStatus.value = data.valid ? 'success' : 'error'
+    validateMessage.value = data.message
+  } catch (e: any) {
+    validateStatus.value = 'error'
+    validateMessage.value = e.response?.data?.detail || '验证请求失败'
+  } finally {
+    validating.value = false
+  }
+}
+
 async function finishSetup() {
   loading.value = true
   try {
@@ -84,6 +148,8 @@ async function finishSetup() {
       api_key: form.value.api_key || undefined,
       telegram_token: form.value.telegram_token || undefined,
       telegram_mode: form.value.telegram_mode,
+      assistant_name: form.value.assistant_name || undefined,
+      language: form.value.language || undefined,
     })
     message.success('Setup complete!')
     router.push('/login')
@@ -145,17 +211,44 @@ async function finishSetup() {
 
         <!-- Step 2: Provider -->
         <NForm v-else-if="currentStep === 2" key="step2">
-          <NFormItem label="Provider">
-            <NSelect v-model:value="form.provider" :options="providerOptions" placeholder="Select provider" clearable size="large" />
-          </NFormItem>
-          <NFormItem label="API Key" v-if="form.provider && form.provider !== 'ollama'">
-            <SecretInput
-              :value="form.api_key"
-              placeholder="API Key"
-              @update:value="(v: string) => form.api_key = v"
+          <NFormItem label="AI 提供商">
+            <NSelect
+              v-model:value="form.provider"
+              :options="selectOptions"
+              placeholder="选择 AI 提供商"
+              clearable
+              size="large"
+              @update:value="onProviderChange"
             />
           </NFormItem>
-          <NSpace justify="space-between">
+          <div v-if="currentProvider?.recommended" class="provider-tip">
+            <span class="tip-badge">⭐ 推荐</span>
+            OpenRouter 支持几乎所有主流模型，新手首选
+          </div>
+          <NFormItem v-if="form.provider && needsKey" label="API Key">
+            <div class="key-row">
+              <SecretInput
+                :value="form.api_key"
+                placeholder="粘贴 API Key"
+                @update:value="(v: string) => { form.api_key = v; validateStatus = 'idle' }"
+                style="flex: 1"
+              />
+              <NButton
+                :loading="validating"
+                :disabled="!form.api_key"
+                size="large"
+                style="margin-left: 8px; flex-shrink: 0"
+                @click="validateKey"
+              >
+                验证
+              </NButton>
+            </div>
+          </NFormItem>
+          <div v-if="validateStatus !== 'idle'" class="validate-result" :class="validateStatus">
+            <span v-if="validateStatus === 'success'">✅ {{ validateMessage }}</span>
+            <span v-else>❌ {{ validateMessage }}</span>
+          </div>
+          <NSpace justify="space-between" style="margin-top: 16px">
             <NButton size="large" @click="prevStep">Back</NButton>
             <NButton type="primary" size="large" @click="nextStep">Next</NButton>
           </NSpace>
@@ -163,7 +256,7 @@ async function finishSetup() {
 
         <!-- Step 3: Telegram -->
         <NForm v-else-if="currentStep === 3" key="step3">
-          <NFormItem label="Telegram Bot Token (optional)">
+          <NFormItem label="Telegram Bot Token（可选）">
             <SecretInput
               :value="form.telegram_token"
               placeholder="123456:ABC-DEF..."
@@ -177,17 +270,24 @@ async function finishSetup() {
         </NForm>
 
         <!-- Step 4: Complete -->
-        <div v-else key="step4" class="complete-step">
-          <div class="check-circle">✓</div>
-          <h2 class="complete-title">Ready to go!</h2>
-          <p class="complete-desc">Your comobot instance is configured and ready.</p>
-          <NSpace justify="center" style="margin-top: 24px;">
+        <NForm v-else key="step4">
+          <NFormItem label="助手名称">
+            <NInput v-model:value="form.assistant_name" placeholder="Comobot" size="large" />
+          </NFormItem>
+          <NFormItem label="界面语言">
+            <NSelect v-model:value="form.language" :options="languageOptions" size="large" />
+          </NFormItem>
+          <div class="access-url">
+            <span class="url-label">完成后访问：</span>
+            <span class="url-value">{{ accessUrl }}</span>
+          </div>
+          <NSpace justify="space-between" style="margin-top: 24px">
             <NButton size="large" @click="prevStep">Back</NButton>
             <NButton type="primary" size="large" :loading="loading" @click="finishSetup">
-              Start Agent
+              开始使用
             </NButton>
           </NSpace>
-        </div>
+        </NForm>
       </Transition>
     </div>
   </div>
@@ -296,33 +396,68 @@ async function finishSetup() {
   min-width: 40px;
 }
 
-/* Complete */
-.complete-step {
-  text-align: center;
-  padding: var(--space-6) 0;
-}
-.check-circle {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: var(--accent-green);
-  color: white;
-  font-size: 28px;
+/* Provider tip */
+.provider-tip {
   display: flex;
   align-items: center;
-  justify-content: center;
-  margin: 0 auto var(--space-6);
-}
-.complete-title {
-  font-size: var(--text-lg);
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0 0 var(--space-2);
-}
-.complete-desc {
-  font-size: var(--text-sm);
+  gap: 8px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
-  margin: 0;
+  margin-bottom: var(--space-4);
+}
+.tip-badge {
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+/* Key row */
+.key-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+/* Validate result */
+.validate-result {
+  font-size: var(--text-sm);
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  margin-bottom: var(--space-4);
+}
+.validate-result.success {
+  background: color-mix(in srgb, var(--accent-green) 10%, transparent);
+  color: var(--accent-green);
+  border: 1px solid color-mix(in srgb, var(--accent-green) 30%, transparent);
+}
+.validate-result.error {
+  background: color-mix(in srgb, var(--accent-red) 10%, transparent);
+  color: var(--accent-red);
+  border: 1px solid color-mix(in srgb, var(--accent-red) 30%, transparent);
+}
+
+/* Access URL */
+.access-url {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: var(--bg-muted);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  margin-top: 8px;
+}
+.url-label {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.url-value {
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
 /* Slide transition */

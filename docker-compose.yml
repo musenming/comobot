@@ -1,37 +1,17 @@
-x-common-config: &common-config
-  build:
-    context: .
-    dockerfile: Dockerfile
-  volumes:
-    - comobot-data:/root/.comobot
-  env_file:
-    - .env
-
 services:
-  comobot-gateway:
-    container_name: comobot-gateway
-    <<: *common-config
-    command: ["gateway"]
-    restart: unless-stopped
+  comobot:
+    image: ghcr.io/musenming/comobot:latest
     ports:
-      - "${COMOBOT_PORT:-18790}:18790"
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1G
-        reservations:
-          cpus: '0.25'
-          memory: 256M
-    stop_grace_period: 35s
-
-  comobot-cli:
-    <<: *common-config
-    profiles:
-      - cli
-    command: ["status"]
-    stdin_open: true
-    tty: true
+      - "18790:18790"
+    volumes:
+      - comobot-data:/root/.comobot
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:18790/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
 volumes:
   comobot-data:

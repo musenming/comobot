@@ -135,7 +135,12 @@
       "Bash(.venv/bin/ruff check . --select E,F,I,N,W --output-format=concise 2>&1 | grep -v \"E501\")",
       "Bash(.venv/bin/ruff check . && .venv/bin/ruff format . --check && echo \"All checks passed\")",
       "Bash(.venv/bin/ruff format . && echo \"Formatted\")",
-      "Bash(.venv/bin/ruff check . && .venv/bin/ruff format . --check && echo \"ALL CHECKS PASSED\")"
+      "Bash(.venv/bin/ruff check . && .venv/bin/ruff format . --check && echo \"ALL CHECKS PASSED\")",
+      "Bash(.venv/bin/ruff check comobot/config/schema.py comobot/api/routes/setup.py 2>&1)",
+      "Bash(chmod +x /home/comobot/scripts/install.sh /home/comobot/docker/start.command)",
+      "Bash(.venv/bin/ruff check comobot/api/routes/setup.py comobot/config/schema.py 2>&1)",
+      "Bash(.venv/bin/ruff check comobot/api/routes/setup.py comobot/config/schema.py && echo \"Lint OK\")",
+      "Bash(ls /home/comobot/*.md /home/comobot/INSTALL* 2>&1)"
     ]
   }
 }
