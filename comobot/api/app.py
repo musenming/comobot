@@ -58,6 +58,7 @@ def create_app(
     from comobot.api.routes.sessions import router as sessions_router
     from comobot.api.routes.settings import router as settings_router
     from comobot.api.routes.setup import router as setup_router
+    from comobot.api.routes.skills import router as skills_router
     from comobot.api.routes.webhook import router as webhook_router
     from comobot.api.routes.workflows import router as workflows_router
     from comobot.api.routes.ws import router as ws_router
@@ -75,6 +76,7 @@ def create_app(
     app.include_router(cron_router)
     app.include_router(logs_router)
     app.include_router(settings_router)
+    app.include_router(skills_router)
     app.include_router(ws_router)
 
     # Serve Vue frontend static files if built

@@ -33,6 +33,7 @@ const menuItems = [
   { key: '/chat', label: 'Chat', icon: '◬' },
   { key: '/workflows', label: 'Creflow', icon: '⚡' },
   { key: '/sessions', label: 'Sessions', icon: '◎' },
+  { key: '/skills', label: 'Skills', icon: '◇' },
   { key: '/cron', label: 'Cron Jobs', icon: '◷' },
 
   { key: '/memory', label: 'Memory', icon: '◐' },

@@ -140,7 +140,17 @@
       "Bash(chmod +x /home/comobot/scripts/install.sh /home/comobot/docker/start.command)",
       "Bash(.venv/bin/ruff check comobot/api/routes/setup.py comobot/config/schema.py 2>&1)",
       "Bash(.venv/bin/ruff check comobot/api/routes/setup.py comobot/config/schema.py && echo \"Lint OK\")",
-      "Bash(ls /home/comobot/*.md /home/comobot/INSTALL* 2>&1)"
+      "Bash(ls /home/comobot/*.md /home/comobot/INSTALL* 2>&1)",
+      "Bash(find /home/comobot -type f -name \"*.py\" -exec grep -l \"class.*Skill\\\\|def.*list.*skill\\\\|/api.*skill\" {} \\\\; 2>/dev/null | head -15)",
+      "Bash(grep -r \"allow_from\\\\|allowFrom\" /home/comobot/comobot/ --include=\"*.py\" 2>/dev/null | head -30)",
+      "Bash(grep -l \"skill\" /home/comobot/web/src/views/*.vue 2>/dev/null)",
+      "Bash(grep -r \"skills\" /home/comobot/web/src --include=\"*.vue\" --include=\"*.ts\" 2>/dev/null | head -20)",
+      "Bash(grep -n \"CREATE TABLE.*session\\\\|CREATE TABLE.*message\" /home/comobot/comobot/db/*.py 2>/dev/null)",
+      "Bash(grep -r \"SkillsLoader\\\\|list_skills\\\\|load_skill\" /home/comobot/comobot --include=\"*.py\" 2>/dev/null | grep -v \".venv\" | head -20)",
+      "Bash(.venv/bin/ruff check .)",
+      "Bash(.venv/bin/ruff check --fix . && .venv/bin/ruff format .)",
+      "Bash(.venv/bin/pytest tests/ -v --timeout=30 2>&1 | tail -40)",
+      "Bash(.venv/bin/pytest tests/ -v 2>&1 | tail -50)"
     ]
   }
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { NDrawer, NDrawerContent, NForm, NFormItem, NInput, NSelect, NButton, NSpace, useMessage } from 'naive-ui'
+import { NDrawer, NDrawerContent, NForm, NFormItem, NInput, NSelect, NButton, NSpace, NDynamicTags, useMessage } from 'naive-ui'
 import SecretInput from './SecretInput.vue'
 import api from '../api/client'
 
@@ -16,7 +16,7 @@ const emit = defineEmits<{
 }>()
 
 const message = useMessage()
-const form = ref<Record<string, string>>({})
+const form = ref<Record<string, any>>({})
 const testing = ref(false)
 const saving = ref(false)
 
@@ -76,6 +76,11 @@ async function test() {
             :value="form[field.key] || field.default"
             :options="(field.options || []).map((o: string) => ({ label: o, value: o }))"
             @update:value="(v: string) => form[field.key] = v"
+          />
+          <NDynamicTags
+            v-else-if="field.type === 'tags'"
+            :value="Array.isArray(form[field.key]) ? form[field.key] : []"
+            @update:value="(v: string[]) => form[field.key] = v"
           />
           <NInput
             v-else

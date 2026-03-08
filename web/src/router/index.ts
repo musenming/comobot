@@ -66,6 +66,12 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/skills',
+    name: 'skills',
+    component: () => import('../views/SkillsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/cron',
     name: 'cron',
     component: () => import('../views/CronView.vue'),

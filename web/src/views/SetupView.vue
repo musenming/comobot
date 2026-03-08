@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { NForm, NFormItem, NInput, NButton, NSelect, NSpace, NTag, NRadioGroup, NRadio, useMessage } from 'naive-ui'
+import { NForm, NFormItem, NInput, NButton, NSelect, NSpace, useMessage } from 'naive-ui'
 import SecretInput from '../components/SecretInput.vue'
 import api from '../api/client'
 

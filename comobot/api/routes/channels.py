@@ -34,6 +34,7 @@ CHANNEL_CONFIG_FIELDS: dict[str, list[dict]] = {
             "default": "polling",
         },
         {"key": "webhook_url", "label": "Webhook URL", "type": "text"},
+        {"key": "allow_from", "label": "Allowed Users", "type": "tags"},
     ],
     "discord": [
         {"key": "bot_token", "label": "Bot Token", "type": "secret", "required": True},
@@ -84,7 +85,7 @@ VAULT_TO_CONFIG_MAP: dict[str, dict[str, str]] = {
 
 
 class ChannelConfigUpdate(BaseModel):
-    config: dict[str, str]
+    config: dict[str, str | list[str]]
 
 
 @router.get("")
@@ -149,8 +150,16 @@ async def get_channel_config(
     ch_cfg = getattr(app_config.channels, channel_type, None)
     mapping = VAULT_TO_CONFIG_MAP.get(channel_type, {})
 
-    config = {}
+    config: dict[str, str | list[str]] = {}
     for f in fields:
+        if f.get("type") == "tags":
+            # List fields: read directly from config object
+            if ch_cfg is not None:
+                attr = mapping.get(f["key"], f["key"])
+                config[f["key"]] = list(getattr(ch_cfg, attr, []) or [])
+            else:
+                config[f["key"]] = []
+            continue
         value = await vault.retrieve(channel_type, f["key"])
         # Fallback to config.json
         if not value and ch_cfg is not None:
@@ -179,14 +188,25 @@ async def update_channel_config(
     mapping = VAULT_TO_CONFIG_MAP.get(channel_type, {})
     config_changed = False
 
+    fields = CHANNEL_CONFIG_FIELDS.get(channel_type, [])
+    field_types = {f["key"]: f.get("type") for f in fields}
+
     for key, value in body.config.items():
-        if value and "****" not in value:
-            await vault.store(channel_type, key, value)
+        # Handle list (tags) fields directly on config object
+        if field_types.get(key) == "tags":
+            if ch_cfg is not None:
+                attr = mapping.get(key, key)
+                if hasattr(ch_cfg, attr):
+                    setattr(ch_cfg, attr, value if isinstance(value, list) else [])
+                    config_changed = True
+            continue
+        if value and "****" not in str(value):
+            await vault.store(channel_type, key, str(value))
             # Sync to config.json
             if ch_cfg is not None:
                 attr = mapping.get(key, key)
                 if hasattr(ch_cfg, attr):
-                    setattr(ch_cfg, attr, value)
+                    setattr(ch_cfg, attr, str(value))
                     config_changed = True
 
     if config_changed:
