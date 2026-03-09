@@ -32,6 +32,17 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build frontend
+        run: |
+          cd web
+          npm ci --silent
+          npm run build
+
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
@@ -45,15 +56,17 @@ jobs:
           SEP=":"
           if [ "$RUNNER_OS" = "Windows" ]; then SEP=";"; fi
 
-          # Locate litellm's model prices backup JSON (required at runtime)
+          # Locate litellm's install dir for required runtime data
           LITELLM_DIR=$(python -c "import litellm, os; print(os.path.dirname(litellm.__file__))")
 
           pyinstaller comobot/__main__.py \
             --onefile \
             --name comobot \
             --collect-submodules comobot \
+            --collect-submodules litellm \
             --add-data "comobot/templates${SEP}comobot/templates" \
             --add-data "comobot/skills${SEP}comobot/skills" \
+            --add-data "web/dist${SEP}web/dist" \
             --add-data "${LITELLM_DIR}/model_prices_and_context_window_backup.json${SEP}litellm" \
             --distpath dist \
             --noconfirm \
@@ -90,9 +103,9 @@ jobs:
 
           tar -czf "$ASSET" -C package comobot
 
-          if tar -tzf "$ASSET" | grep -E '\.(py|pyi|ts|tsx|js|jsx)$' >/dev/null; then
+          if tar -tzf "$ASSET" | grep -E '\.(py|pyi|ts|tsx)$' >/dev/null; then
             echo "Source code files detected in release package, aborting." >&2
-            tar -tzf "$ASSET" | grep -E '\.(py|pyi|ts|tsx|js|jsx)$' >&2 || true
+            tar -tzf "$ASSET" | grep -E '\.(py|pyi|ts|tsx)$' >&2 || true
             exit 1
           fi
 
