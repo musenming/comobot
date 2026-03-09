@@ -8,7 +8,7 @@
 
 ```
 comobot/
-├── nanobot/                    # 核心 Python 包
+├── comobot/                    # 核心 Python 包
 │   ├── agent/                  # Agent 核心引擎 (2482 行)
 │   │   ├── loop.py             #   主处理循环 — 消息消费、LLM 调用、工具执行
 │   │   ├── context.py          #   上下文构建器 — 系统提示词组装
@@ -264,7 +264,7 @@ comobot/
 ## 配置体系
 
 ```
-~/.nanobot/
+~/.comobot/
 ├── config.json                 # 主配置文件
 │   ├── providers               #   LLM API 密钥 (anthropic, openai, deepseek, ...)
 │   ├── agents.defaults         #   模型/温度/最大迭代/记忆窗口
