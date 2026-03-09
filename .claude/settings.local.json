@@ -156,7 +156,8 @@
       "Bash(chmod +x:*)",
       "Bash(curl:*)",
       "Bash(gh run:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(docker buildx:*)"
     ]
   }
 }

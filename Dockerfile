@@ -19,7 +19,8 @@ WORKDIR /app
 # Python deps first (layer cache)
 COPY pyproject.toml ./
 COPY comobot/ ./comobot/
-RUN pip install --no-cache-dir -e . && \
+COPY bridge/ ./bridge/
+RUN pip install --no-cache-dir . && \
     pip cache purge
 
 # Frontend static files
