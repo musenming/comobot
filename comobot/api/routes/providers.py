@@ -17,6 +17,8 @@ class ProviderCreate(BaseModel):
     provider: str
     key_name: str = "api_key"
     value: str
+    api_base: str | None = None
+    extra_headers: dict[str, str] | None = None
 
 
 @router.get("")
@@ -84,6 +86,27 @@ async def list_provider_keys(
     return [{"name": "api_key", "prefix": prefix}]
 
 
+@router.get("/{provider}/config")
+async def get_provider_config(
+    provider: str,
+    _user: str = Depends(get_current_user),
+):
+    """Return full provider config (api_key masked)."""
+    config = load_config()
+    provider_cfg = getattr(config.providers, provider, None)
+    if provider_cfg is None or not isinstance(provider_cfg, ProviderConfig):
+        raise HTTPException(status_code=404, detail="Unknown provider")
+    masked_key = ""
+    if provider_cfg.api_key:
+        k = provider_cfg.api_key
+        masked_key = k[:8] + "..." if len(k) > 8 else "****"
+    return {
+        "api_key": masked_key,
+        "api_base": provider_cfg.api_base or "",
+        "extra_headers": provider_cfg.extra_headers or {},
+    }
+
+
 @router.post("")
 async def add_provider(
     body: ProviderCreate,
@@ -92,13 +115,17 @@ async def add_provider(
 ):
     await vault.store(body.provider, body.key_name, body.value)
 
-    # Sync api_key to config.json so gateway can read it at startup
-    if body.key_name == "api_key":
-        config = load_config()
-        provider_cfg = getattr(config.providers, body.provider, None)
-        if provider_cfg is not None:
+    # Sync to config.json so gateway can read it at startup
+    config = load_config()
+    provider_cfg = getattr(config.providers, body.provider, None)
+    if provider_cfg is not None:
+        if body.key_name == "api_key":
             provider_cfg.api_key = body.value
-            save_config(config)
+        if body.api_base is not None:
+            provider_cfg.api_base = body.api_base or None
+        if body.extra_headers is not None:
+            provider_cfg.extra_headers = body.extra_headers or None
+        save_config(config)
 
     return {"provider": body.provider, "key_name": body.key_name, "stored": True}
 

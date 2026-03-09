@@ -5,8 +5,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from comobot.db.connection import Database
@@ -95,6 +96,20 @@ def create_app(
             static_dir = candidate
             break
     if static_dir:
+        # SPA catch-all: serve index.html for non-API, non-static paths
+        @app.get("/{full_path:path}")
+        async def spa_fallback(full_path: str):
+            if full_path.startswith("api/"):
+                raise HTTPException(status_code=404)
+            # Try serving as a static file first
+            file_path = static_dir / full_path
+            if full_path and file_path.is_file():
+                return FileResponse(file_path)
+            index = static_dir / "index.html"
+            if index.exists():
+                return FileResponse(index)
+            raise HTTPException(status_code=404)
+
         app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
 
     return app

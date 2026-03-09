@@ -22,6 +22,11 @@ const savingAgent = ref(false)
 const previewSoul = ref(false)
 const previewUser = ref(false)
 
+// Defaults
+const defaultsForm = ref({ model: '', provider: 'auto' })
+const savingDefaults = ref(false)
+const providerOptions = ref<{ label: string; value: string }[]>([{ label: 'Auto', value: 'auto' }])
+
 // Danger zone
 const showClearMemory = ref(false)
 
@@ -33,14 +38,27 @@ const themeOptions = [
 
 onMounted(async () => {
   try {
-    const [soul, user, memory] = await Promise.all([
+    const [soul, user, memory, defaults, providers] = await Promise.all([
       api.get('/settings/soul'),
       api.get('/settings/user'),
       api.get('/settings/memory'),
+      api.get('/settings/defaults').catch(() => null),
+      api.get('/providers').catch(() => null),
     ])
     soulContent.value = soul.data.content || ''
     userContent.value = user.data.content || ''
     memoryContent.value = memory.data.content || ''
+    if (defaults?.data) {
+      defaultsForm.value.model = defaults.data.model || ''
+      defaultsForm.value.provider = defaults.data.provider || 'auto'
+    }
+    if (providers?.data) {
+      const opts = [{ label: 'Auto', value: 'auto' }]
+      for (const p of providers.data) {
+        opts.push({ label: p.provider, value: p.provider })
+      }
+      providerOptions.value = opts
+    }
   } catch {
     // May fail if files don't exist yet
   }
@@ -91,6 +109,18 @@ async function saveUser() {
   }
 }
 
+async function saveDefaults() {
+  savingDefaults.value = true
+  try {
+    await api.put('/settings/defaults', defaultsForm.value)
+    message.success('Defaults saved')
+  } catch (e: any) {
+    message.error(e.response?.data?.detail || 'Failed to save defaults')
+  } finally {
+    savingDefaults.value = false
+  }
+}
+
 async function handleClearMemory() {
   try {
     await api.delete('/settings/memory')
@@ -115,6 +145,21 @@ async function handleClearMemory() {
             style="width: 200px"
             @update:value="(v: any) => themeStore.setTheme(v)"
           />
+        </div>
+
+        <div class="settings-section">
+          <div class="section-header">
+            <h3 class="section-title">Defaults</h3>
+            <NButton size="small" type="primary" :loading="savingDefaults" @click="saveDefaults">Save</NButton>
+          </div>
+          <NForm label-placement="top" style="max-width: 400px">
+            <NFormItem label="Model">
+              <NInput v-model:value="defaultsForm.model" placeholder="e.g. anthropic/claude-opus-4-5" />
+            </NFormItem>
+            <NFormItem label="Provider">
+              <NSelect v-model:value="defaultsForm.provider" :options="providerOptions" />
+            </NFormItem>
+          </NForm>
         </div>
       </NTabPane>
 

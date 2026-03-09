@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from comobot.api.deps import get_auth, get_current_user
+from comobot.config.loader import load_config, save_config
 from comobot.security.auth import AuthManager
 
 router = APIRouter(prefix="/api/settings")
@@ -19,6 +20,11 @@ class ChangePasswordRequest(BaseModel):
 
 class FileContentRequest(BaseModel):
     content: str
+
+
+class DefaultsUpdate(BaseModel):
+    model: str | None = None
+    provider: str | None = None
 
 
 @router.get("")
@@ -113,3 +119,24 @@ async def clear_memory(_user: str = Depends(get_current_user)):
     if path.exists():
         path.write_text("# Memory\n\n", encoding="utf-8")
     return {"cleared": True}
+
+
+@router.get("/defaults")
+async def get_defaults(_user: str = Depends(get_current_user)):
+    config = load_config()
+    d = config.agents.defaults
+    return {"model": d.model, "provider": d.provider}
+
+
+@router.put("/defaults")
+async def update_defaults(
+    body: DefaultsUpdate,
+    _user: str = Depends(get_current_user),
+):
+    config = load_config()
+    if body.model is not None:
+        config.agents.defaults.model = body.model
+    if body.provider is not None:
+        config.agents.defaults.provider = body.provider
+    save_config(config)
+    return {"updated": True}

@@ -102,6 +102,8 @@ const router = createRouter({
   routes,
 })
 
+let tokenVerified = false
+
 router.beforeEach(async (to) => {
   const token = localStorage.getItem('token')
 
@@ -125,6 +127,22 @@ router.beforeEach(async (to) => {
 
   if (to.meta.requiresAuth && !token) {
     return '/login'
+  }
+
+  // Verify token validity once per page load
+  if (to.meta.requiresAuth && token && !tokenVerified) {
+    try {
+      const res = await fetch('/api/settings', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.status === 401) {
+        localStorage.removeItem('token')
+        return '/login'
+      }
+      tokenVerified = true
+    } catch {
+      // Network error — allow navigation, interceptor will handle 401 later
+    }
   }
 })
 
