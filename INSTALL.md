@@ -13,7 +13,7 @@
 在终端粘贴一条命令，自动完成所有依赖安装、服务启动，并在浏览器打开配置向导：
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/musenming/comobot/main/scripts/install.sh)"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/musenming/comobot-install/main/scripts/install.sh | sh)"
 ```
 
 **系统要求**：macOS 12+（Monterey）或 Ubuntu 20.04+ / CentOS 8+，需要联网
