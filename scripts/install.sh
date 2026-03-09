@@ -39,30 +39,28 @@ detect_platform() {
 get_download_url() {
     info "Fetching latest release info..."
 
-    local curl_opts=(-fsSL)
-    # Use GITHUB_TOKEN if available to avoid API rate limits
-    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-        curl_opts+=(-H "Authorization: token $GITHUB_TOKEN")
-    fi
+    # Primary: resolve version via GitHub redirect (no API, no rate limit)
+    local redirect_url
+    redirect_url=$(curl -fsSI "https://github.com/$REPO/releases/latest" 2>/dev/null \
+        | grep -i '^location:' | sed 's/.*tag\/v//;s/[[:space:]]//g') || true
+    VERSION="${redirect_url:-}"
 
-    local release_info
-    release_info=$(curl "${curl_opts[@]}" "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null) || true
-
-    if [[ -n "$release_info" ]]; then
-        VERSION=$(echo "$release_info" | grep '"tag_name"' | sed 's/.*"v\(.*\)".*/\1/')
-    fi
-
-    # Fallback: resolve latest tag via GitHub redirect if API fails (rate limit)
-    if [[ -z "${VERSION:-}" ]]; then
-        warn "API rate-limited, falling back to redirect detection..."
-        local redirect_url
-        redirect_url=$(curl -fsSI "https://github.com/$REPO/releases/latest" 2>/dev/null \
-            | grep -i '^location:' | sed 's/.*tag\/v//;s/[[:space:]]//g') || true
-        VERSION="${redirect_url:-}"
+    # Fallback: use GitHub API (may hit rate limit for unauthenticated requests)
+    if [[ -z "$VERSION" ]]; then
+        local curl_opts=(-fsSL)
+        if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+            curl_opts+=(-H "Authorization: token $GITHUB_TOKEN")
+        fi
+        local release_info
+        release_info=$(curl "${curl_opts[@]}" \
+            "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null) || true
+        if [[ -n "$release_info" ]]; then
+            VERSION=$(echo "$release_info" | grep '"tag_name"' | sed 's/.*"v\(.*\)".*/\1/')
+        fi
     fi
 
     if [[ -z "${VERSION:-}" ]]; then
-        error "Failed to determine latest version. Try setting GITHUB_TOKEN or visit https://github.com/$REPO/releases"
+        error "Failed to determine latest version. Visit https://github.com/$REPO/releases"
     fi
 
     ASSET_NAME="comobot-${VERSION}-${TARGET}.tar.gz"
