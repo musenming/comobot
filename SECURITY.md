@@ -55,7 +55,7 @@ chmod 600 ~/.comobot/config.json
 ```
 
 **Security Notes:**
-- In `v0.1.4.post3` and earlier, an empty `allowFrom` allows all users. In newer versions (including source builds), **empty `allowFrom` denies all access** — set `["*"]` to explicitly allow everyone.
+- In `v0.1.1` and earlier, an empty `allowFrom` allows all users. In newer versions (including source builds), **empty `allowFrom` denies all access** — set `["*"]` to explicitly allow everyone.
 - Get your Telegram user ID from `@userinfobot`
 - Use full phone numbers with country code for WhatsApp
 - Review access logs regularly for unauthorized access attempts

@@ -5,6 +5,8 @@ set -euo pipefail
 
 REPO="musenming/comobot"
 INSTALL_DIR="$HOME/.comobot/bin"
+CLEANUP_DIR=""
+SHELL_RC=""
 
 # ── Colours ───────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
@@ -75,7 +77,8 @@ install_binary() {
 
     local tmp
     tmp=$(mktemp -d)
-    trap 'rm -rf "$tmp"' EXIT
+    CLEANUP_DIR="$tmp"
+    trap 'rm -rf "$CLEANUP_DIR"' EXIT
 
     info "Downloading $ASSET_NAME..."
     curl -fsSL "$DOWNLOAD_URL" -o "$tmp/comobot.tar.gz" \
@@ -97,20 +100,31 @@ install_binary() {
 
 # ── Add to PATH ───────────────────────────────────────────────────────────────
 setup_path() {
-    local shell_rc=""
+    # 1. Symlink into /usr/local/bin so comobot is immediately available
+    local symlink_dir="/usr/local/bin"
+    if [[ -d "$symlink_dir" && -w "$symlink_dir" ]]; then
+        ln -sf "$INSTALL_DIR/comobot" "$symlink_dir/comobot"
+        info "Created symlink in $symlink_dir (available immediately)"
+    elif command -v sudo &>/dev/null; then
+        sudo ln -sf "$INSTALL_DIR/comobot" "$symlink_dir/comobot" 2>/dev/null \
+            && info "Created symlink in $symlink_dir (available immediately)" \
+            || warn "Could not create symlink in $symlink_dir"
+    fi
+
+    # 2. Also add to shell rc for future sessions (in case symlink dir is removed)
     case "${SHELL:-}" in
-        */zsh)  shell_rc="$HOME/.zshrc" ;;
-        */bash) shell_rc="$HOME/.bashrc" ;;
-        *)      shell_rc="$HOME/.profile" ;;
+        */zsh)  SHELL_RC="$HOME/.zshrc" ;;
+        */bash) SHELL_RC="$HOME/.bashrc" ;;
+        *)      SHELL_RC="$HOME/.profile" ;;
     esac
 
-    if ! grep -q "$INSTALL_DIR" "$shell_rc" 2>/dev/null; then
+    if ! grep -q "$INSTALL_DIR" "$SHELL_RC" 2>/dev/null; then
         {
             echo ""
             echo "# Comobot"
             echo "export PATH=\"$INSTALL_DIR:\$PATH\""
-        } >> "$shell_rc"
-        info "Added $INSTALL_DIR to PATH in $shell_rc"
+        } >> "$SHELL_RC"
+        info "Added $INSTALL_DIR to PATH in $SHELL_RC"
     fi
 }
 
@@ -122,9 +136,9 @@ verify() {
         ver=$(comobot --version 2>/dev/null || echo "$VERSION")
         success "Comobot installed successfully! Version: $ver"
         echo "  Run 'comobot --help' to get started."
-        echo "  Please restart your terminal or run: source ${shell_rc:-~/.profile}"
     else
-        warn "Installation completed but verification failed. Check $INSTALL_DIR"
+        warn "Installation completed but 'comobot' not found in PATH."
+        echo "  Please restart your terminal or run: source $SHELL_RC"
     fi
 }
 
