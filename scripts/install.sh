@@ -102,16 +102,27 @@ install_binary() {
 setup_path() {
     # 1. Symlink into /usr/local/bin so comobot is immediately available
     local symlink_dir="/usr/local/bin"
+    local symlink_ok=false
+
     if [[ -d "$symlink_dir" && -w "$symlink_dir" ]]; then
-        ln -sf "$INSTALL_DIR/comobot" "$symlink_dir/comobot"
-        info "Created symlink in $symlink_dir (available immediately)"
+        ln -sf "$INSTALL_DIR/comobot" "$symlink_dir/comobot" && symlink_ok=true
     elif command -v sudo &>/dev/null; then
-        sudo ln -sf "$INSTALL_DIR/comobot" "$symlink_dir/comobot" 2>/dev/null \
-            && info "Created symlink in $symlink_dir (available immediately)" \
-            || warn "Could not create symlink in $symlink_dir"
+        # When running via "curl | bash", stdin is the pipe, not the terminal.
+        # Redirect sudo's stdin from /dev/tty so it can prompt for password.
+        if [[ ! -d "$symlink_dir" ]]; then
+            sudo mkdir -p "$symlink_dir" < /dev/tty 2>/dev/null || true
+        fi
+        if [[ -d "$symlink_dir" ]]; then
+            sudo ln -sf "$INSTALL_DIR/comobot" "$symlink_dir/comobot" < /dev/tty 2>/dev/null \
+                && symlink_ok=true
+        fi
     fi
 
-    # 2. Also add to shell rc for future sessions (in case symlink dir is removed)
+    if $symlink_ok; then
+        info "Created symlink in $symlink_dir"
+    fi
+
+    # 2. Also add to shell rc for future sessions
     case "${SHELL:-}" in
         */zsh)  SHELL_RC="$HOME/.zshrc" ;;
         */bash) SHELL_RC="$HOME/.bashrc" ;;
@@ -127,10 +138,13 @@ setup_path() {
         info "Added $INSTALL_DIR to PATH in $SHELL_RC"
     fi
 
-    # Source shell rc so comobot is available in current session
     export PATH="$INSTALL_DIR:$PATH"
-    # shellcheck disable=SC1090
-    source "$SHELL_RC" 2>/dev/null || true
+
+    # 3. If symlink failed, tell the user to open a new terminal
+    if ! $symlink_ok; then
+        warn "Could not create symlink in $symlink_dir"
+        warn "Please open a new terminal window, then comobot will be available."
+    fi
 }
 
 # ── Verify ────────────────────────────────────────────────────────────────────
