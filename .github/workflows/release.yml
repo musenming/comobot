@@ -32,33 +32,27 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Linux system dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y patchelf
-
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install nuitka ordered-set zstandard
+          pip install pyinstaller
           pip install -e .
 
-      - name: Build fully compiled binary (Nuitka)
+      - name: Build onefile binary (PyInstaller)
         shell: bash
         run: |
           set -euo pipefail
-          python -m nuitka comobot/__main__.py \
+          SEP=":"
+          if [ "$RUNNER_OS" = "Windows" ]; then SEP=";"; fi
+          pyinstaller comobot/__main__.py \
             --onefile \
-            --standalone \
-            --follow-imports \
-            --include-package=comobot \
-            --include-data-dir=comobot/templates=comobot/templates \
-            --include-data-dir=comobot/skills=comobot/skills \
-            --assume-yes-for-downloads \
-            --remove-output \
-            --output-dir=build \
-            --output-filename=comobot
+            --name comobot \
+            --collect-submodules comobot \
+            --add-data "comobot/templates${SEP}comobot/templates" \
+            --add-data "comobot/skills${SEP}comobot/skills" \
+            --distpath build \
+            --noconfirm \
+            --clean
 
       - name: Resolve built binary
         id: resolve
