@@ -38,21 +38,35 @@ detect_platform() {
 # ── Fetch latest release URL ─────────────────────────────────────────────────
 get_download_url() {
     info "Fetching latest release info..."
-    local release_info
-    release_info=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest") \
-        || error "Failed to fetch release info. Check your network connection."
 
-    VERSION=$(echo "$release_info" | grep '"tag_name"' | sed 's/.*"v\(.*\)".*/\1/')
-    if [[ -z "$VERSION" ]]; then
-        error "Failed to parse version from release info."
+    local curl_opts=(-fsSL)
+    # Use GITHUB_TOKEN if available to avoid API rate limits
+    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+        curl_opts+=(-H "Authorization: token $GITHUB_TOKEN")
+    fi
+
+    local release_info
+    release_info=$(curl "${curl_opts[@]}" "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null) || true
+
+    if [[ -n "$release_info" ]]; then
+        VERSION=$(echo "$release_info" | grep '"tag_name"' | sed 's/.*"v\(.*\)".*/\1/')
+    fi
+
+    # Fallback: resolve latest tag via GitHub redirect if API fails (rate limit)
+    if [[ -z "${VERSION:-}" ]]; then
+        warn "API rate-limited, falling back to redirect detection..."
+        local redirect_url
+        redirect_url=$(curl -fsSI "https://github.com/$REPO/releases/latest" 2>/dev/null \
+            | grep -i '^location:' | sed 's/.*tag\/v//;s/[[:space:]]//g') || true
+        VERSION="${redirect_url:-}"
+    fi
+
+    if [[ -z "${VERSION:-}" ]]; then
+        error "Failed to determine latest version. Try setting GITHUB_TOKEN or visit https://github.com/$REPO/releases"
     fi
 
     ASSET_NAME="comobot-${VERSION}-${TARGET}.tar.gz"
-    DOWNLOAD_URL=$(echo "$release_info" | grep "browser_download_url" | grep "$ASSET_NAME" | cut -d'"' -f4)
-
-    if [[ -z "$DOWNLOAD_URL" ]]; then
-        error "No release found for ${TARGET}. Available assets may not include your platform."
-    fi
+    DOWNLOAD_URL="https://github.com/$REPO/releases/download/v${VERSION}/${ASSET_NAME}"
 
     info "Found comobot v${VERSION} for ${TARGET}"
 }
