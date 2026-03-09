@@ -126,6 +126,11 @@ setup_path() {
         } >> "$SHELL_RC"
         info "Added $INSTALL_DIR to PATH in $SHELL_RC"
     fi
+
+    # Source shell rc so comobot is available in current session
+    export PATH="$INSTALL_DIR:$PATH"
+    # shellcheck disable=SC1090
+    source "$SHELL_RC" 2>/dev/null || true
 }
 
 # ── Verify ────────────────────────────────────────────────────────────────────
@@ -135,6 +140,13 @@ verify() {
         local ver
         ver=$(comobot --version 2>/dev/null || echo "$VERSION")
         success "Comobot installed successfully! Version: $ver"
+        echo ""
+        # Run onboard to generate config if not exists
+        if [[ ! -f "$HOME/.comobot/config.json" ]]; then
+            info "Running initial setup (comobot onboard)..."
+            comobot onboard || warn "Onboard failed. You can run 'comobot onboard' manually later."
+        fi
+        echo ""
         echo "  Run 'comobot --help' to get started."
     else
         warn "Installation completed but 'comobot' not found in PATH."

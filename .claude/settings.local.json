@@ -157,7 +157,9 @@
       "Bash(curl:*)",
       "Bash(gh run:*)",
       "WebSearch",
-      "Bash(docker buildx:*)"
+      "Bash(docker buildx:*)",
+      "Bash(mcp__happy__change_title comobot安装PATH问题修复:*)",
+      "Bash(mcp__happy__change_title 修复comobot安装和litellm打包问题:*)"
     ]
   }
 }

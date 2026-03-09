@@ -44,12 +44,17 @@ jobs:
           set -euo pipefail
           SEP=":"
           if [ "$RUNNER_OS" = "Windows" ]; then SEP=";"; fi
+
+          # Locate litellm's model prices backup JSON (required at runtime)
+          LITELLM_DIR=$(python -c "import litellm, os; print(os.path.dirname(litellm.__file__))")
+
           pyinstaller comobot/__main__.py \
             --onefile \
             --name comobot \
             --collect-submodules comobot \
             --add-data "comobot/templates${SEP}comobot/templates" \
             --add-data "comobot/skills${SEP}comobot/skills" \
+            --add-data "${LITELLM_DIR}/model_prices_and_context_window_backup.json${SEP}litellm" \
             --distpath dist \
             --noconfirm \
             --clean
