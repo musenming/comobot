@@ -160,7 +160,12 @@
       "Bash(docker buildx:*)",
       "Bash(mcp__happy__change_title comobot安装PATH问题修复:*)",
       "Bash(mcp__happy__change_title 修复comobot安装和litellm打包问题:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(pip show:*)",
+      "Bash(python:*)",
+      "Bash(source:*)",
+      "Bash(python3.11:*)",
+      "Bash(/opt/homebrew/Caskroom/miniconda/base/bin/python:*)"
     ]
   }
 }
