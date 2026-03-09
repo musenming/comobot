@@ -19,9 +19,6 @@ jobs:
           - os: macos-latest
             target: macos-arm64
             binary_glob: comobot*
-          - os: macos-13
-            target: macos-x64
-            binary_glob: comobot*
           - os: windows-latest
             target: windows-x64
             binary_glob: comobot*.exe

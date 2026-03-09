@@ -153,7 +153,10 @@
       "Bash(.venv/bin/pytest tests/ -v 2>&1 | tail -50)",
       "Bash(gh release:*)",
       "Bash(gh api:*)",
-      "Bash(chmod +x:*)"
+      "Bash(chmod +x:*)",
+      "Bash(curl:*)",
+      "Bash(gh run:*)",
+      "WebSearch"
     ]
   }
 }
