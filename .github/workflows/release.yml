@@ -50,7 +50,7 @@ jobs:
             --collect-submodules comobot \
             --add-data "comobot/templates${SEP}comobot/templates" \
             --add-data "comobot/skills${SEP}comobot/skills" \
-            --distpath build \
+            --distpath dist \
             --noconfirm \
             --clean
 
@@ -60,10 +60,10 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          matches=(build/${{ matrix.binary_glob }})
+          matches=(dist/${{ matrix.binary_glob }})
           if [ ${#matches[@]} -eq 0 ]; then
-            echo "No built binary found in ./build" >&2
-            ls -la build || true
+            echo "No built binary found in ./dist" >&2
+            ls -la dist || true
             exit 1
           fi
           BIN_PATH="${matches[0]}"
