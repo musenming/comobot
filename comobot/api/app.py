@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -80,10 +81,20 @@ def create_app(
     app.include_router(ws_router)
 
     # Serve Vue frontend static files if built
-    static_dir = Path(__file__).parent.parent / "web" / "dist"
-    if not static_dir.exists():
-        static_dir = Path(__file__).parent.parent.parent / "web" / "dist"
-    if static_dir.exists():
+    static_dir = None
+    candidates = [
+        Path(__file__).parent.parent / "web" / "dist",
+        Path(__file__).parent.parent.parent / "web" / "dist",
+    ]
+    # PyInstaller bundles assets under sys._MEIPASS
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidates.insert(0, Path(meipass) / "web" / "dist")
+    for candidate in candidates:
+        if candidate.exists():
+            static_dir = candidate
+            break
+    if static_dir:
         app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
 
     return app
