@@ -67,7 +67,23 @@ Web UI (Vue3)  <->  FastAPI API  <->  AgentLoop / Orchestrator
 
 ## 快速开始
 
-### 方式 A：源码安装（推荐开发者）
+### 方式 A：一键安装（推荐）
+
+#### macOS / Linux
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/musenming/comobot/main/scripts/install.sh | bash
+```
+
+#### Windows（PowerShell）
+
+```powershell
+irm https://raw.githubusercontent.com/musenming/comobot/main/scripts/install.ps1 | iex
+```
+
+> 一键安装将从 GitHub Releases 下载对应平台的预编译二进制（非源码安装）。
+
+### 方式 B：源码安装（开发者）
 
 ```bash
 git clone https://github.com/musenming/comobot.git
@@ -78,13 +94,13 @@ pip install --upgrade pip setuptools wheel
 pip install -e ".[dev]"
 ```
 
-### 方式 B：PyPI
+### 方式 C：PyPI
 
 ```bash
 pip install comobot
 ```
 
-### 方式 C：uv（快速）
+### 方式 D：uv（快速）
 
 ```bash
 uv tool install comobot

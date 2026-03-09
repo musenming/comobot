@@ -15,13 +15,16 @@ jobs:
         include:
           - os: ubuntu-latest
             target: linux-x64
-            binary: comobot
+            binary_glob: comobot*
           - os: macos-latest
+            target: macos-arm64
+            binary_glob: comobot*
+          - os: macos-13
             target: macos-x64
-            binary: comobot
+            binary_glob: comobot*
           - os: windows-latest
             target: windows-x64
-            binary: comobot.exe
+            binary_glob: comobot*.exe
 
     steps:
       - name: Checkout
@@ -32,15 +35,48 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y patchelf
+
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller
-          pip install .
+          pip install nuitka ordered-set zstandard
+          pip install -e .
 
-      - name: Build standalone binary
+      - name: Build fully compiled binary (Nuitka)
+        shell: bash
         run: |
-          pyinstaller --onefile --name comobot comobot/__main__.py
+          set -euo pipefail
+          python -m nuitka comobot/__main__.py \
+            --onefile \
+            --standalone \
+            --follow-imports \
+            --include-package=comobot \
+            --include-data-dir=comobot/templates=comobot/templates \
+            --include-data-dir=comobot/skills=comobot/skills \
+            --assume-yes-for-downloads \
+            --remove-output \
+            --output-dir=build \
+            --output-filename=comobot
+
+      - name: Resolve built binary
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          matches=(build/${{ matrix.binary_glob }})
+          if [ ${#matches[@]} -eq 0 ]; then
+            echo "No built binary found in ./build" >&2
+            ls -la build || true
+            exit 1
+          fi
+          BIN_PATH="${matches[0]}"
+          echo "binary_path=$BIN_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Package tar.gz
         id: package
@@ -51,12 +87,19 @@ jobs:
           ASSET="comobot-${VERSION}-${{ matrix.target }}.tar.gz"
 
           mkdir -p package/comobot
-          cp "dist/${{ matrix.binary }}" package/comobot/
+          cp "${{ steps.resolve.outputs.binary_path }}" package/comobot/
 
           if [ -f LICENSE ]; then cp LICENSE package/comobot/; fi
           if [ -f README.md ]; then cp README.md package/comobot/; fi
 
           tar -czf "$ASSET" -C package comobot
+
+          if tar -tzf "$ASSET" | grep -E '\.(py|pyi|ts|tsx|js|jsx)$' >/dev/null; then
+            echo "Source code files detected in release package, aborting." >&2
+            tar -tzf "$ASSET" | grep -E '\.(py|pyi|ts|tsx|js|jsx)$' >&2 || true
+            exit 1
+          fi
+
           echo "asset=$ASSET" >> "$GITHUB_OUTPUT"
 
       - name: Upload packaged artifact
@@ -81,8 +124,16 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum *.tar.gz > checksums.txt
+          cat checksums.txt
+
       - name: Create GitHub Release and upload assets
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.tar.gz
+          files: |
+            dist/*.tar.gz
+            dist/checksums.txt
           generate_release_notes: true
