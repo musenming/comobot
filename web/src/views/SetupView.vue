@@ -1,9 +1,32 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { NForm, NFormItem, NInput, NButton, NSelect, NSpace, useMessage } from 'naive-ui'
+import { NForm, NFormItem, NInput, NButton, NSelect, NSpace, NDynamicTags, useMessage } from 'naive-ui'
 import SecretInput from '../components/SecretInput.vue'
 import api from '../api/client'
+
+interface FieldDef {
+  key: string
+  label: string
+  type: string
+  required?: boolean
+  options?: string[]
+  default?: string
+}
+
+interface ProviderOption {
+  label: string
+  value: string
+  recommended: boolean
+  needsKey: boolean
+  fields: FieldDef[]
+}
+
+interface ChannelOption {
+  id: string
+  name: string
+  fields: FieldDef[]
+}
 
 const router = useRouter()
 const message = useMessage()
@@ -12,45 +35,68 @@ const loading = ref(false)
 const validating = ref(false)
 const validateStatus = ref<'idle' | 'success' | 'error'>('idle')
 const validateMessage = ref('')
-const providerOptions = ref<Array<{ label: string; value: string; recommended: boolean; needsKey: boolean }>>([])
+const providerOptions = ref<ProviderOption[]>([])
+const channelOptions = ref<ChannelOption[]>([])
 
 const form = ref({
   admin_password: '',
   admin_password_confirm: '',
   provider: null as string | null,
-  api_key: '',
-  telegram_token: '',
-  telegram_mode: 'polling',
+  provider_config: {} as Record<string, string>,
+  channel_type: null as string | null,
+  channel_config: {} as Record<string, string | string[]>,
   assistant_name: 'Comobot',
   language: 'zh',
 })
 
 onMounted(async () => {
+  // Fetch providers
   try {
     const { data } = await api.get('/setup/providers')
     providerOptions.value = data.map((p: any) => ({
       label: p.name,
       value: p.id,
       recommended: p.recommended,
-      needs_key: p.needs_key,
+      needsKey: p.needs_key ?? p.needsKey ?? true,
+      fields: p.fields || [],
     }))
   } catch {
-    // fallback static list
     providerOptions.value = [
-      { label: 'OpenRouter（推荐）', value: 'openrouter', recommended: true, needsKey: true },
-      { label: 'OpenAI', value: 'openai', recommended: false, needsKey: true },
-      { label: 'Anthropic (Claude)', value: 'anthropic', recommended: false, needsKey: true },
-      { label: 'DeepSeek', value: 'deepseek', recommended: false, needsKey: true },
-      { label: 'Google Gemini', value: 'gemini', recommended: false, needsKey: true },
-      { label: '本地模型（Ollama）', value: 'ollama', recommended: false, needsKey: false },
+      { label: 'OpenRouter（推荐）', value: 'openrouter', recommended: true, needsKey: true, fields: [{ key: 'api_key', label: 'API Key', type: 'secret', required: true }] },
+      { label: 'OpenAI', value: 'openai', recommended: false, needsKey: true, fields: [{ key: 'api_key', label: 'API Key', type: 'secret', required: true }] },
+      { label: 'Anthropic (Claude)', value: 'anthropic', recommended: false, needsKey: true, fields: [{ key: 'api_key', label: 'API Key', type: 'secret', required: true }] },
+      { label: 'DeepSeek', value: 'deepseek', recommended: false, needsKey: true, fields: [{ key: 'api_key', label: 'API Key', type: 'secret', required: true }] },
+      { label: 'Google Gemini', value: 'gemini', recommended: false, needsKey: true, fields: [{ key: 'api_key', label: 'API Key', type: 'secret', required: true }] },
+      { label: '本地模型（Ollama）', value: 'ollama', recommended: false, needsKey: false, fields: [{ key: 'api_base', label: 'API Base URL', type: 'text', default: 'http://localhost:11434/v1' }] },
+    ]
+  }
+
+  // Fetch channels
+  try {
+    const { data } = await api.get('/setup/channels')
+    channelOptions.value = data
+  } catch {
+    channelOptions.value = [
+      { id: 'telegram', name: 'Telegram', fields: [{ key: 'bot_token', label: 'Bot Token', type: 'secret', required: true }] },
+      { id: 'discord', name: 'Discord', fields: [{ key: 'bot_token', label: 'Bot Token', type: 'secret', required: true }] },
+      { id: 'slack', name: 'Slack', fields: [{ key: 'bot_token', label: 'Bot Token', type: 'secret', required: true }] },
+      { id: 'feishu', name: 'Feishu', fields: [{ key: 'app_id', label: 'App ID', type: 'text', required: true }, { key: 'app_secret', label: 'App Secret', type: 'secret', required: true }] },
+      { id: 'dingtalk', name: 'Dingtalk', fields: [{ key: 'app_key', label: 'App Key', type: 'text', required: true }, { key: 'app_secret', label: 'App Secret', type: 'secret', required: true }] },
     ]
   }
 })
 
-const selectOptions = computed(() =>
+const providerSelectOptions = computed(() =>
   providerOptions.value.map((p) => ({
     label: p.label + (p.recommended ? ' ⭐' : ''),
     value: p.value,
+  }))
+)
+
+const channelSelectOptions = computed(() =>
+  channelOptions.value.map((c) => ({
+    label: c.name,
+    value: c.id,
   }))
 )
 
@@ -58,10 +104,12 @@ const currentProvider = computed(() =>
   providerOptions.value.find((p) => p.value === form.value.provider)
 )
 
-const needsKey = computed(() => {
-  if (!currentProvider.value) return false
-  return (currentProvider.value as any).needs_key ?? (currentProvider.value as any).needsKey ?? true
-})
+const currentChannel = computed(() =>
+  channelOptions.value.find((c) => c.id === form.value.channel_type)
+)
+
+const providerFields = computed(() => currentProvider.value?.fields || [])
+const channelFields = computed(() => currentChannel.value?.fields || [])
 
 const languageOptions = [
   { label: '中文（简体）', value: 'zh' },
@@ -90,7 +138,7 @@ const strengthColor = computed(() => {
 const steps = [
   { num: 1, label: 'Admin' },
   { num: 2, label: 'LLM' },
-  { num: 3, label: 'Telegram' },
+  { num: 3, label: 'Channel' },
   { num: 4, label: 'Done' },
 ]
 
@@ -117,17 +165,37 @@ function prevStep() {
 function onProviderChange() {
   validateStatus.value = 'idle'
   validateMessage.value = ''
+  // Reset provider config with defaults
+  const cfg: Record<string, string> = {}
+  for (const f of (currentProvider.value?.fields || [])) {
+    cfg[f.key] = f.default || ''
+  }
+  form.value.provider_config = cfg
+}
+
+function onChannelChange() {
+  // Reset channel config with defaults
+  const cfg: Record<string, string | string[]> = {}
+  for (const f of (currentChannel.value?.fields || [])) {
+    if (f.type === 'tags') {
+      cfg[f.key] = []
+    } else {
+      cfg[f.key] = f.default || ''
+    }
+  }
+  form.value.channel_config = cfg
 }
 
 async function validateKey() {
-  if (!form.value.provider || !form.value.api_key) return
+  const apiKey = form.value.provider_config['api_key']
+  if (!form.value.provider || !apiKey) return
   validating.value = true
   validateStatus.value = 'idle'
   validateMessage.value = ''
   try {
     const { data } = await api.post('/setup/validate-key', {
       provider: form.value.provider,
-      api_key: form.value.api_key,
+      api_key: apiKey,
     })
     validateStatus.value = data.valid ? 'success' : 'error'
     validateMessage.value = data.message
@@ -145,9 +213,11 @@ async function finishSetup() {
     await api.post('/setup', {
       admin_password: form.value.admin_password,
       provider: form.value.provider,
-      api_key: form.value.api_key || undefined,
-      telegram_token: form.value.telegram_token || undefined,
-      telegram_mode: form.value.telegram_mode,
+      provider_config: form.value.provider_config || undefined,
+      api_key: form.value.provider_config['api_key'] || undefined,
+      api_base: form.value.provider_config['api_base'] || undefined,
+      channel_type: form.value.channel_type || undefined,
+      channel_config: form.value.channel_type ? form.value.channel_config : undefined,
       assistant_name: form.value.assistant_name || undefined,
       language: form.value.language || undefined,
     })
@@ -214,7 +284,7 @@ async function finishSetup() {
           <NFormItem label="AI 提供商">
             <NSelect
               v-model:value="form.provider"
-              :options="selectOptions"
+              :options="providerSelectOptions"
               placeholder="选择 AI 提供商"
               clearable
               size="large"
@@ -225,25 +295,41 @@ async function finishSetup() {
             <span class="tip-badge">⭐ 推荐</span>
             OpenRouter 支持几乎所有主流模型，新手首选
           </div>
-          <NFormItem v-if="form.provider && needsKey" label="API Key">
-            <div class="key-row">
-              <SecretInput
-                :value="form.api_key"
-                placeholder="粘贴 API Key"
-                @update:value="(v: string) => { form.api_key = v; validateStatus = 'idle' }"
-                style="flex: 1"
-              />
-              <NButton
-                :loading="validating"
-                :disabled="!form.api_key"
+
+          <!-- Dynamic provider fields -->
+          <template v-if="form.provider">
+            <NFormItem
+              v-for="field in providerFields"
+              :key="field.key"
+              :label="field.label"
+            >
+              <div v-if="field.key === 'api_key'" class="key-row">
+                <SecretInput
+                  :value="form.provider_config[field.key] || ''"
+                  :placeholder="field.label"
+                  @update:value="(v: string) => { form.provider_config[field.key] = v; validateStatus = 'idle' }"
+                  style="flex: 1"
+                />
+                <NButton
+                  :loading="validating"
+                  :disabled="!form.provider_config[field.key]"
+                  size="large"
+                  style="margin-left: 8px; flex-shrink: 0"
+                  @click="validateKey"
+                >
+                  验证
+                </NButton>
+              </div>
+              <NInput
+                v-else
+                :value="form.provider_config[field.key] || ''"
+                :placeholder="field.default || field.label"
                 size="large"
-                style="margin-left: 8px; flex-shrink: 0"
-                @click="validateKey"
-              >
-                验证
-              </NButton>
-            </div>
-          </NFormItem>
+                @update:value="(v: string) => form.provider_config[field.key] = v"
+              />
+            </NFormItem>
+          </template>
+
           <div v-if="validateStatus !== 'idle'" class="validate-result" :class="validateStatus">
             <span v-if="validateStatus === 'success'">✅ {{ validateMessage }}</span>
             <span v-else>❌ {{ validateMessage }}</span>
@@ -254,15 +340,52 @@ async function finishSetup() {
           </NSpace>
         </NForm>
 
-        <!-- Step 3: Telegram -->
+        <!-- Step 3: Channel (Generic) -->
         <NForm v-else-if="currentStep === 3" key="step3">
-          <NFormItem label="Telegram Bot Token（可选）">
-            <SecretInput
-              :value="form.telegram_token"
-              placeholder="123456:ABC-DEF..."
-              @update:value="(v: string) => form.telegram_token = v"
+          <NFormItem label="聊天渠道（可选）">
+            <NSelect
+              v-model:value="form.channel_type"
+              :options="channelSelectOptions"
+              placeholder="选择聊天渠道"
+              clearable
+              size="large"
+              @update:value="onChannelChange"
             />
           </NFormItem>
+
+          <!-- Dynamic channel fields -->
+          <template v-if="form.channel_type && channelFields.length">
+            <NFormItem
+              v-for="field in channelFields"
+              :key="field.key"
+              :label="field.label"
+            >
+              <SecretInput
+                v-if="field.type === 'secret'"
+                :value="(form.channel_config[field.key] as string) || ''"
+                :placeholder="field.label"
+                @update:value="(v: string) => form.channel_config[field.key] = v"
+              />
+              <NSelect
+                v-else-if="field.type === 'select'"
+                :value="(form.channel_config[field.key] as string) || field.default"
+                :options="(field.options || []).map((o: string) => ({ label: o, value: o }))"
+                @update:value="(v: string) => form.channel_config[field.key] = v"
+              />
+              <NDynamicTags
+                v-else-if="field.type === 'tags'"
+                :value="Array.isArray(form.channel_config[field.key]) ? (form.channel_config[field.key] as string[]) : []"
+                @update:value="(v: string[]) => form.channel_config[field.key] = v"
+              />
+              <NInput
+                v-else
+                :value="(form.channel_config[field.key] as string) || ''"
+                :placeholder="field.label"
+                @update:value="(v: string) => form.channel_config[field.key] = v"
+              />
+            </NFormItem>
+          </template>
+
           <NSpace justify="space-between">
             <NButton size="large" @click="prevStep">Back</NButton>
             <NButton type="primary" size="large" @click="nextStep">Next</NButton>

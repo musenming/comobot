@@ -178,7 +178,11 @@
       "Bash(/Users/musen/comobot/.venv/bin/python3.11:*)",
       "Bash(pip3 show:*)",
       "Bash(pip3 install:*)",
-      "Bash(ruff check:*)"
+      "Bash(ruff check:*)",
+      "Bash(.venv/bin/ruff format --check comobot/api/routes/setup.py)",
+      "Bash(.venv/bin/pytest tests/ -v -x --timeout=30 2>&1 | tail -30)",
+      "Bash(.venv/bin/pytest tests/ -v -x 2>&1 | tail -30)",
+      "Bash(.venv/bin/pytest tests/ -v -k \"setup or channel or provider\" 2>&1 | tail -20)"
     ]
   }
 }
