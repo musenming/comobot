@@ -61,6 +61,8 @@ jobs:
             --name comobot \
             --collect-submodules comobot \
             --collect-all litellm \
+            --collect-all tiktoken \
+            --collect-all tiktoken_ext \
             --add-data "comobot/templates${SEP}comobot/templates" \
             --add-data "comobot/skills${SEP}comobot/skills" \
             --add-data "web/dist${SEP}web/dist" \
