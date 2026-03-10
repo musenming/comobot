@@ -171,7 +171,8 @@
       "Bash(xargs cat:*)",
       "Bash(.venv/bin/python:*)",
       "Bash(npx vue-tsc:*)",
-      "Bash(node_modules/.bin/vue-tsc:*)"
+      "Bash(node_modules/.bin/vue-tsc:*)",
+      "Bash(/Users/musen/comobot/.venv/bin/python:*)"
     ]
   }
 }

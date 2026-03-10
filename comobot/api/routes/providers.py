@@ -113,13 +113,17 @@ async def add_provider(
     vault: CredentialVault = Depends(get_vault),
     _user: str = Depends(get_current_user),
 ):
-    await vault.store(body.provider, body.key_name, body.value)
+    # Skip saving api_key if value is empty or looks masked (unchanged by user)
+    key_changed = bool(body.value) and "..." not in body.value and "****" not in body.value
+
+    if key_changed:
+        await vault.store(body.provider, body.key_name, body.value)
 
     # Sync to config.json so gateway can read it at startup
     config = load_config()
     provider_cfg = getattr(config.providers, body.provider, None)
     if provider_cfg is not None:
-        if body.key_name == "api_key":
+        if body.key_name == "api_key" and key_changed:
             provider_cfg.api_key = body.value
         if body.api_base is not None:
             provider_cfg.api_base = body.api_base or None
