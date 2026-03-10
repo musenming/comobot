@@ -49,6 +49,14 @@ CHANNEL_CONFIG_FIELDS: dict[str, list[dict]] = {
     "feishu": [
         {"key": "app_id", "label": "App ID", "type": "text", "required": True},
         {"key": "app_secret", "label": "App Secret", "type": "secret", "required": True},
+        {"key": "allow_from", "label": "Allowed Users", "type": "tags"},
+        {
+            "key": "ssl_verify",
+            "label": "SSL Verify",
+            "type": "select",
+            "options": ["true", "false"],
+            "default": "true",
+        },
     ],
     "dingtalk": [
         {"key": "app_key", "label": "App Key", "type": "text", "required": True},
@@ -173,6 +181,13 @@ async def get_channel_config(
             else:
                 config[f["key"]] = []
             continue
+        # Select fields with boolean config attributes: read directly
+        if f.get("type") == "select" and ch_cfg is not None:
+            attr = mapping.get(f["key"], f["key"])
+            val = getattr(ch_cfg, attr, None)
+            if isinstance(val, bool):
+                config[f["key"]] = "true" if val else "false"
+                continue
         value = await vault.retrieve(channel_type, f["key"])
         # Fallback to config.json
         if not value and ch_cfg is not None:
@@ -214,6 +229,13 @@ async def update_channel_config(
                     setattr(ch_cfg, attr, value if isinstance(value, list) else [])
                     config_changed = True
             continue
+        # Handle select fields with boolean config attributes
+        if field_types.get(key) == "select" and ch_cfg is not None:
+            attr = mapping.get(key, key)
+            if hasattr(ch_cfg, attr) and isinstance(getattr(ch_cfg, attr), bool):
+                setattr(ch_cfg, attr, str(value).lower() == "true")
+                config_changed = True
+                continue
         if value and "****" not in str(value):
             await vault.store(channel_type, key, str(value))
             # Sync to config.json
