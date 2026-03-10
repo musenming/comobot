@@ -24,6 +24,19 @@ def get_vault(request: Request) -> CredentialVault:
     return request.app.state.vault
 
 
+def get_channels(request: Request):
+    """Get ChannelManager from app state."""
+    from comobot.channels.manager import ChannelManager
+
+    cm: ChannelManager | None = getattr(request.app.state, "channels", None)
+    if cm is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Channel manager not available",
+        )
+    return cm
+
+
 async def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),

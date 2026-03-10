@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import re
+import ssl
 import threading
 from collections import OrderedDict
 from pathlib import Path
@@ -273,6 +274,44 @@ class FeishuChannel(BaseChannel):
         self._processed_message_ids: OrderedDict[str, None] = OrderedDict()  # Ordered dedup cache
         self._loop: asyncio.AbstractEventLoop | None = None
 
+    @staticmethod
+    def _patch_ssl_verify(ws_client: Any) -> None:
+        """Patch lark ws.Client to skip SSL certificate verification.
+
+        Temporarily replaces requests.post and websockets.connect with versions
+        that disable SSL verification during ws_client._connect() calls.
+        """
+        import requests
+        import websockets
+
+        ssl_ctx = ssl.create_default_context()
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = ssl.CERT_NONE
+
+        orig_connect = ws_client._connect
+
+        async def _connect_no_ssl_verify() -> None:
+            orig_post = requests.post
+            orig_ws_connect = websockets.connect
+
+            def post_no_verify(*args: Any, **kwargs: Any) -> Any:
+                kwargs["verify"] = False
+                return orig_post(*args, **kwargs)
+
+            def ws_connect_no_verify(*args: Any, **kwargs: Any) -> Any:
+                kwargs.setdefault("ssl", ssl_ctx)
+                return orig_ws_connect(*args, **kwargs)
+
+            requests.post = post_no_verify
+            websockets.connect = ws_connect_no_verify
+            try:
+                return await orig_connect()
+            finally:
+                requests.post = orig_post
+                websockets.connect = orig_ws_connect
+
+        ws_client._connect = _connect_no_ssl_verify
+
     async def start(self) -> None:
         """Start the Feishu bot with WebSocket long connection."""
         if not FEISHU_AVAILABLE:
@@ -312,6 +351,11 @@ class FeishuChannel(BaseChannel):
             event_handler=event_handler,
             log_level=lark.LogLevel.INFO,
         )
+
+        # Disable SSL verification if configured (for proxies/self-signed certs)
+        if not self.config.ssl_verify:
+            self._patch_ssl_verify(self._ws_client)
+            logger.warning("Feishu SSL certificate verification disabled")
 
         # Start WebSocket client in a separate thread with reconnect loop
         def run_ws():

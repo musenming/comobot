@@ -18,130 +18,68 @@ class ChannelManager:
 
     Responsibilities:
     - Initialize enabled channels (Telegram, WhatsApp, etc.)
-    - Start/stop channels
+    - Start/stop channels dynamically
     - Route outbound messages
     """
+
+    # Channel factory: name -> (module_path, class_name)
+    CHANNEL_REGISTRY: dict[str, tuple[str, str]] = {
+        "telegram": ("comobot.channels.telegram", "TelegramChannel"),
+        "whatsapp": ("comobot.channels.whatsapp", "WhatsAppChannel"),
+        "discord": ("comobot.channels.discord", "DiscordChannel"),
+        "feishu": ("comobot.channels.feishu", "FeishuChannel"),
+        "mochat": ("comobot.channels.mochat", "MochatChannel"),
+        "dingtalk": ("comobot.channels.dingtalk", "DingTalkChannel"),
+        "email": ("comobot.channels.email", "EmailChannel"),
+        "slack": ("comobot.channels.slack", "SlackChannel"),
+        "qq": ("comobot.channels.qq", "QQChannel"),
+        "matrix": ("comobot.channels.matrix", "MatrixChannel"),
+    }
 
     def __init__(self, config: Config, bus: MessageBus):
         self.config = config
         self.bus = bus
         self.channels: dict[str, BaseChannel] = {}
+        self._channel_tasks: dict[str, asyncio.Task] = {}
         self._dispatch_task: asyncio.Task | None = None
 
         self._init_channels()
 
+    def _create_channel(self, name: str) -> BaseChannel | None:
+        """Create a channel instance by name using the registry."""
+        import importlib
+
+        entry = self.CHANNEL_REGISTRY.get(name)
+        if not entry:
+            logger.warning("Unknown channel: {}", name)
+            return None
+
+        module_path, class_name = entry
+        try:
+            mod = importlib.import_module(module_path)
+            cls = getattr(mod, class_name)
+        except ImportError as e:
+            logger.warning("{} channel not available: {}", name, e)
+            return None
+
+        ch_cfg = getattr(self.config.channels, name, None)
+        if ch_cfg is None:
+            return None
+
+        # Telegram needs extra kwargs
+        if name == "telegram":
+            return cls(ch_cfg, self.bus, groq_api_key=self.config.providers.groq.api_key)
+        return cls(ch_cfg, self.bus)
+
     def _init_channels(self) -> None:
         """Initialize channels based on config."""
-
-        # Telegram channel
-        if self.config.channels.telegram.enabled:
-            try:
-                from comobot.channels.telegram import TelegramChannel
-
-                self.channels["telegram"] = TelegramChannel(
-                    self.config.channels.telegram,
-                    self.bus,
-                    groq_api_key=self.config.providers.groq.api_key,
-                )
-                logger.info("Telegram channel enabled")
-            except ImportError as e:
-                logger.warning("Telegram channel not available: {}", e)
-
-        # WhatsApp channel
-        if self.config.channels.whatsapp.enabled:
-            try:
-                from comobot.channels.whatsapp import WhatsAppChannel
-
-                self.channels["whatsapp"] = WhatsAppChannel(self.config.channels.whatsapp, self.bus)
-                logger.info("WhatsApp channel enabled")
-            except ImportError as e:
-                logger.warning("WhatsApp channel not available: {}", e)
-
-        # Discord channel
-        if self.config.channels.discord.enabled:
-            try:
-                from comobot.channels.discord import DiscordChannel
-
-                self.channels["discord"] = DiscordChannel(self.config.channels.discord, self.bus)
-                logger.info("Discord channel enabled")
-            except ImportError as e:
-                logger.warning("Discord channel not available: {}", e)
-
-        # Feishu channel
-        if self.config.channels.feishu.enabled:
-            try:
-                from comobot.channels.feishu import FeishuChannel
-
-                self.channels["feishu"] = FeishuChannel(self.config.channels.feishu, self.bus)
-                logger.info("Feishu channel enabled")
-            except ImportError as e:
-                logger.warning("Feishu channel not available: {}", e)
-
-        # Mochat channel
-        if self.config.channels.mochat.enabled:
-            try:
-                from comobot.channels.mochat import MochatChannel
-
-                self.channels["mochat"] = MochatChannel(self.config.channels.mochat, self.bus)
-                logger.info("Mochat channel enabled")
-            except ImportError as e:
-                logger.warning("Mochat channel not available: {}", e)
-
-        # DingTalk channel
-        if self.config.channels.dingtalk.enabled:
-            try:
-                from comobot.channels.dingtalk import DingTalkChannel
-
-                self.channels["dingtalk"] = DingTalkChannel(self.config.channels.dingtalk, self.bus)
-                logger.info("DingTalk channel enabled")
-            except ImportError as e:
-                logger.warning("DingTalk channel not available: {}", e)
-
-        # Email channel
-        if self.config.channels.email.enabled:
-            try:
-                from comobot.channels.email import EmailChannel
-
-                self.channels["email"] = EmailChannel(self.config.channels.email, self.bus)
-                logger.info("Email channel enabled")
-            except ImportError as e:
-                logger.warning("Email channel not available: {}", e)
-
-        # Slack channel
-        if self.config.channels.slack.enabled:
-            try:
-                from comobot.channels.slack import SlackChannel
-
-                self.channels["slack"] = SlackChannel(self.config.channels.slack, self.bus)
-                logger.info("Slack channel enabled")
-            except ImportError as e:
-                logger.warning("Slack channel not available: {}", e)
-
-        # QQ channel
-        if self.config.channels.qq.enabled:
-            try:
-                from comobot.channels.qq import QQChannel
-
-                self.channels["qq"] = QQChannel(
-                    self.config.channels.qq,
-                    self.bus,
-                )
-                logger.info("QQ channel enabled")
-            except ImportError as e:
-                logger.warning("QQ channel not available: {}", e)
-
-        # Matrix channel
-        if self.config.channels.matrix.enabled:
-            try:
-                from comobot.channels.matrix import MatrixChannel
-
-                self.channels["matrix"] = MatrixChannel(
-                    self.config.channels.matrix,
-                    self.bus,
-                )
-                logger.info("Matrix channel enabled")
-            except ImportError as e:
-                logger.warning("Matrix channel not available: {}", e)
+        for name in self.CHANNEL_REGISTRY:
+            ch_cfg = getattr(self.config.channels, name, None)
+            if ch_cfg is not None and ch_cfg.enabled:
+                channel = self._create_channel(name)
+                if channel:
+                    self.channels[name] = channel
+                    logger.info("{} channel enabled", name)
 
         self._validate_allow_from()
 
@@ -228,6 +166,64 @@ class ChannelManager:
                 continue
             except asyncio.CancelledError:
                 break
+
+    async def start_channel(self, name: str) -> bool:
+        """Dynamically start a single channel at runtime."""
+        if name in self.channels:
+            logger.info("Channel {} already running, restarting...", name)
+            await self.stop_channel(name)
+
+        channel = self._create_channel(name)
+        if not channel:
+            return False
+
+        self.channels[name] = channel
+        self._validate_allow_from()
+        logger.info("Starting {} channel...", name)
+        task = asyncio.create_task(self._start_channel(name, channel))
+        self._channel_tasks[name] = task
+        return True
+
+    async def stop_channel(self, name: str) -> bool:
+        """Stop and remove a running channel."""
+        channel = self.channels.pop(name, None)
+        if not channel:
+            return False
+
+        try:
+            await channel.stop()
+            logger.info("Stopped {} channel", name)
+        except Exception as e:
+            logger.error("Error stopping {}: {}", name, e)
+
+        task = self._channel_tasks.pop(name, None)
+        if task and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        return True
+
+    async def reload_channels(self, config: Config) -> dict[str, list[str]]:
+        """Reload channels based on updated config. Returns started/stopped channel names."""
+        self.config = config
+        started: list[str] = []
+        stopped: list[str] = []
+
+        for name in self.CHANNEL_REGISTRY:
+            ch_cfg = getattr(config.channels, name, None)
+            is_enabled = ch_cfg is not None and ch_cfg.enabled
+            is_running = name in self.channels
+
+            if is_enabled and not is_running:
+                if await self.start_channel(name):
+                    started.append(name)
+            elif not is_enabled and is_running:
+                if await self.stop_channel(name):
+                    stopped.append(name)
+
+        return {"started": started, "stopped": stopped}
 
     def get_channel(self, name: str) -> BaseChannel | None:
         """Get a channel by name."""

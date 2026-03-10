@@ -48,6 +48,7 @@ class FeishuConfig(Base):
     react_emoji: str = (
         "THUMBSUP"  # Emoji type for message reactions (e.g. THUMBSUP, OK, DONE, SMILE)
     )
+    ssl_verify: bool = True  # Set false to skip SSL verification (for proxies/self-signed certs)
 
 
 class DingTalkConfig(Base):

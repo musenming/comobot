@@ -3,7 +3,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from comobot.api.deps import get_current_user, get_db, get_vault
+from comobot.api.deps import get_channels, get_current_user, get_db, get_vault
+from comobot.channels.manager import ChannelManager
 from comobot.config.loader import load_config, save_config
 from comobot.db.connection import Database
 from comobot.security.crypto import CredentialVault
@@ -135,6 +136,18 @@ async def list_channels(
     return results
 
 
+@router.post("/reload")
+async def reload_channels(
+    channels: ChannelManager = Depends(get_channels),
+    _user: str = Depends(get_current_user),
+):
+    """Reload channel configuration from disk and start/stop channels as needed."""
+    new_config = load_config()
+    channels.config = new_config
+    result = await channels.reload_channels(new_config)
+    return {"reloaded": True, **result}
+
+
 @router.get("/{channel_type}/config")
 async def get_channel_config(
     channel_type: str,
@@ -177,6 +190,7 @@ async def update_channel_config(
     channel_type: str,
     body: ChannelConfigUpdate,
     vault: CredentialVault = Depends(get_vault),
+    channels: ChannelManager = Depends(get_channels),
     _user: str = Depends(get_current_user),
 ):
     """Update channel configuration."""
@@ -209,8 +223,16 @@ async def update_channel_config(
                     setattr(ch_cfg, attr, str(value))
                     config_changed = True
 
-    if config_changed:
+    # Auto-enable channel when configured via UI
+    if config_changed and ch_cfg is not None:
+        ch_cfg.enabled = True
         save_config(app_config)
+
+        # Auto-reload: start the channel if not already running
+        was_running = channel_type in channels.channels
+        channels.config = app_config
+        if not was_running:
+            await channels.start_channel(channel_type)
 
     return {"updated": True, "type": channel_type}
 
