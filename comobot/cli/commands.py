@@ -549,9 +549,11 @@ def gateway(
             console.print(f"[green]✓[/green] Web panel: http://0.0.0.0:{port}")
 
             # Register signal handlers for graceful shutdown
-            loop = asyncio.get_running_loop()
-            for sig in (signal.SIGTERM, signal.SIGINT):
-                loop.add_signal_handler(sig, _signal_handler)
+            # add_signal_handler is not supported on Windows
+            if sys.platform != "win32":
+                loop = asyncio.get_running_loop()
+                for sig in (signal.SIGTERM, signal.SIGINT):
+                    loop.add_signal_handler(sig, _signal_handler)
 
             await cron.start()
             await heartbeat.start()
