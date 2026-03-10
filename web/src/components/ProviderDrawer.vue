@@ -28,6 +28,7 @@ const form = ref({
   api_base: '',
   extra_headers: [] as { key: string; value: string }[],
 })
+const originalMaskedKey = ref('')
 
 const providerOptions = [
   { label: 'OpenAI', value: 'openai' },
@@ -60,6 +61,7 @@ watch(() => props.show, async (v) => {
     try {
       const { data } = await api.get(`/providers/${props.editProvider}/config`)
       form.value.api_key = data.api_key || ''
+      originalMaskedKey.value = form.value.api_key
       form.value.api_base = data.api_base || ''
       const headers = data.extra_headers || {}
       form.value.extra_headers = Object.entries(headers).map(([key, value]) => ({
@@ -73,6 +75,7 @@ watch(() => props.show, async (v) => {
     }
   } else if (v) {
     form.value = { provider: '', api_key: '', api_base: '', extra_headers: [] }
+    originalMaskedKey.value = ''
   }
 })
 
@@ -98,10 +101,12 @@ async function save() {
         extraHeaders[h.key.trim()] = h.value
       }
     }
+    // Only send api_key if user actually changed it (not the masked placeholder)
+    const apiKeyChanged = form.value.api_key !== originalMaskedKey.value
     await api.post('/providers', {
       provider: form.value.provider,
       key_name: 'api_key',
-      value: form.value.api_key,
+      value: apiKeyChanged ? form.value.api_key : '',
       api_base: form.value.api_base || null,
       extra_headers: Object.keys(extraHeaders).length > 0 ? extraHeaders : null,
     })
