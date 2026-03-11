@@ -187,7 +187,8 @@
       "Bash(brew list:*)",
       "Bash(conda run:*)",
       "Bash(.venv/bin/pip install:*)",
-      "Bash(env:*)"
+      "Bash(env:*)",
+      "Bash(ruff format:*)"
     ]
   }
 }

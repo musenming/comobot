@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, h, onMounted } from 'vue'
+import { ref, h, onMounted, onUnmounted } from 'vue'
 import { NButton, NSpace, NDrawer, NDrawerContent, NForm, NFormItem, NInput, useMessage } from 'naive-ui'
 import PageLayout from '../components/PageLayout.vue'
 import DataTable from '../components/DataTable.vue'
@@ -15,6 +15,8 @@ const drawerOpen = ref(false)
 const editingId = ref<number | null>(null)
 const deleteConfirm = ref(false)
 const deleteTarget = ref<number | null>(null)
+const now = ref(Date.now())
+let tickTimer: ReturnType<typeof setInterval> | null = null
 
 const form = ref({
   name: '',
@@ -23,18 +25,100 @@ const form = ref({
   description: '',
 })
 
+// Tick every second for countdown
+onMounted(() => {
+  tickTimer = setInterval(() => { now.value = Date.now() }, 1000)
+})
+onUnmounted(() => {
+  if (tickTimer) clearInterval(tickTimer)
+})
+
+function formatCountdown(nextRunAt: string | null): string {
+  if (!nextRunAt) return '—'
+  const target = new Date(nextRunAt).getTime()
+  const diff = target - now.value
+  if (diff <= 0) return 'Due now'
+  const seconds = Math.floor(diff / 1000)
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ${seconds % 60}s`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ${minutes % 60}m`
+  const days = Math.floor(hours / 24)
+  return `${days}d ${hours % 24}h`
+}
+
+function parseScheduleDisplay(row: any): string {
+  // The schedule column is a JSON string from the cron service
+  if (row.schedule_display) return row.schedule_display
+  if (row.expression) return row.expression
+  try {
+    const sched = typeof row.schedule === 'string' ? JSON.parse(row.schedule) : row.schedule
+    if (sched?.kind === 'cron' && sched?.expr) return sched.expr
+    if (sched?.kind === 'at' && sched?.atMs) {
+      return new Date(sched.atMs).toLocaleString()
+    }
+    if (sched?.kind === 'every' && sched?.everyMs) {
+      const sec = sched.everyMs / 1000
+      if (sec < 60) return `every ${sec}s`
+      if (sec < 3600) return `every ${Math.round(sec / 60)}m`
+      return `every ${Math.round(sec / 3600)}h`
+    }
+  } catch {
+    // fallback
+  }
+  return String(row.schedule || '—')
+}
+
+function parsePayloadSummary(row: any): string {
+  if (row.command) return row.command
+  try {
+    const payload = typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload
+    return payload?.message || ''
+  } catch {
+    return ''
+  }
+}
+
 const columns = [
   {
     title: 'Status',
     key: 'enabled',
-    width: 100,
+    width: 80,
     render: (row: any) => h(StatusBadge, {
-      status: row.enabled ? (row.last_status === 'failed' ? 'error' : 'online') : 'offline',
+      status: row.enabled ? (row.last_status === 'error' ? 'error' : 'online') : 'offline',
     }),
   },
-  { title: 'Name', key: 'name' },
-  { title: 'Schedule', key: 'expression' },
-  { title: 'Last Run', key: 'last_run_at', render: (row: any) => row.last_run_at || '—' },
+  {
+    title: 'Name',
+    key: 'name',
+    width: 160,
+  },
+  {
+    title: 'Schedule',
+    key: 'schedule',
+    width: 140,
+    render: (row: any) => parseScheduleDisplay(row),
+  },
+  {
+    title: 'Task Summary',
+    key: 'payload',
+    ellipsis: { tooltip: true },
+    render: (row: any) => {
+      const summary = parsePayloadSummary(row)
+      return summary.length > 60 ? summary.slice(0, 60) + '...' : summary || '—'
+    },
+  },
+  {
+    title: 'Next Run',
+    key: 'next_run_at',
+    width: 120,
+    render: (row: any) => {
+      const countdown = formatCountdown(row.next_run_at)
+      return h('span', { style: countdown === 'Due now' ? 'color: var(--accent-green, #22c55e); font-weight: 500' : '' }, countdown)
+    },
+  },
+  { title: 'Last Run', key: 'last_run_at', width: 140, render: (row: any) => row.last_run_at || '—' },
   {
     title: 'Actions',
     key: 'actions',
@@ -69,8 +153,8 @@ function openEdit(row: any) {
   editingId.value = row.id
   form.value = {
     name: row.name || '',
-    expression: row.expression || '',
-    command: row.command || '',
+    expression: parseScheduleDisplay(row),
+    command: parsePayloadSummary(row),
     description: row.description || '',
   }
   drawerOpen.value = true
@@ -144,7 +228,7 @@ onMounted(loadJobs)
       :columns="columns"
       :data="jobs"
       :loading="loading"
-      empty-icon="◷"
+      empty-icon="&#9719;"
       empty-title="No cron jobs"
       empty-description="Create scheduled tasks to automate your workflows."
     >

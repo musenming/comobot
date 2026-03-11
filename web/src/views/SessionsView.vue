@@ -100,6 +100,8 @@ function connectWs() {
           created_at: new Date().toISOString(),
         })
         scrollToBottom()
+        // Refresh sessions list to update message counts
+        loadSessions()
       } else if (parsed.type === 'error') {
         thinking.value = false
         sending.value = false
@@ -157,7 +159,7 @@ function sendMessage() {
 }
 
 function handleKeydown(e: KeyboardEvent) {
-  if (e.key === 'Enter' && !e.shiftKey) {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
     e.preventDefault()
     sendMessage()
   }
@@ -180,7 +182,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <PageLayout title="Sessions" description="View conversation history">
+  <PageLayout title="Sessions" description="View and continue conversation history">
     <div v-if="loading" class="sessions-layout">
       <div class="session-list">
         <SkeletonCard v-for="i in 5" :key="i" :lines="1" />
@@ -191,7 +193,7 @@ onUnmounted(() => {
     </div>
 
     <template v-else-if="sessions.length === 0">
-      <EmptyState icon="◎" title="No sessions yet" description="Sessions will appear here once users start chatting." />
+      <EmptyState icon="&#9678;" title="No sessions yet" description="Sessions will appear here once users start chatting." />
     </template>
 
     <div v-else class="sessions-layout">
@@ -245,7 +247,7 @@ onUnmounted(() => {
           </template>
         </div>
 
-        <!-- Chat Input -->
+        <!-- Chat Input - always visible when a session is selected -->
         <div v-if="selectedKey" class="chat-input-area">
           <div class="connection-status" :class="{ online: wsConnected }">
             {{ wsConnected ? 'Connected' : 'Disconnected' }}

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { NButton, useMessage } from 'naive-ui'
+import { NButton, NCard, NForm, NFormItem, NInput, NSelect, NSpace, useMessage } from 'naive-ui'
 import PageLayout from '../components/PageLayout.vue'
 import ProviderCard from '../components/ProviderCard.vue'
 import ProviderDrawer from '../components/ProviderDrawer.vue'
@@ -14,14 +14,50 @@ const providers = ref<any[]>([])
 const drawerOpen = ref(false)
 const editProvider = ref<string | null>(null)
 
+// Defaults (moved from Settings)
+const defaultsForm = ref({ model: '', provider: 'auto' })
+const savingDefaults = ref(false)
+const providerOptions = ref<{ label: string; value: string }[]>([{ label: 'Auto', value: 'auto' }])
+
 async function loadProviders() {
   try {
     const { data } = await api.get('/providers')
     providers.value = data
+
+    // Build provider options for the defaults selector
+    const opts = [{ label: 'Auto', value: 'auto' }]
+    for (const p of data) {
+      opts.push({ label: p.provider, value: p.provider })
+    }
+    providerOptions.value = opts
   } catch {
     // may fail if no providers
   } finally {
     loading.value = false
+  }
+}
+
+async function loadDefaults() {
+  try {
+    const { data } = await api.get('/settings/defaults')
+    if (data) {
+      defaultsForm.value.model = data.model || ''
+      defaultsForm.value.provider = data.provider || 'auto'
+    }
+  } catch {
+    // ignore
+  }
+}
+
+async function saveDefaults() {
+  savingDefaults.value = true
+  try {
+    await api.put('/settings/defaults', defaultsForm.value)
+    message.success('Defaults saved')
+  } catch (e: any) {
+    message.error(e.response?.data?.detail || 'Failed to save defaults')
+  } finally {
+    savingDefaults.value = false
   }
 }
 
@@ -54,7 +90,9 @@ async function removeProvider(p: any) {
   }
 }
 
-onMounted(loadProviders)
+onMounted(async () => {
+  await Promise.all([loadProviders(), loadDefaults()])
+})
 </script>
 
 <template>
@@ -63,11 +101,40 @@ onMounted(loadProviders)
       <NButton type="primary" @click="openAdd">+ Add Provider</NButton>
     </template>
 
+    <!-- Default Model & Provider selector (above provider cards) -->
+    <NCard class="defaults-card" :bordered="true" size="small">
+      <div class="defaults-row">
+        <NFormItem label="Default Model" :show-feedback="false" class="defaults-field">
+          <NInput
+            v-model:value="defaultsForm.model"
+            placeholder="e.g. anthropic/claude-opus-4-5"
+            size="small"
+          />
+        </NFormItem>
+        <NFormItem label="Default Provider" :show-feedback="false" class="defaults-field">
+          <NSelect
+            v-model:value="defaultsForm.provider"
+            :options="providerOptions"
+            size="small"
+          />
+        </NFormItem>
+        <NButton
+          type="primary"
+          size="small"
+          :loading="savingDefaults"
+          class="defaults-save"
+          @click="saveDefaults"
+        >
+          Save
+        </NButton>
+      </div>
+    </NCard>
+
     <div v-if="loading" class="provider-grid">
       <SkeletonCard v-for="i in 3" :key="i" height="160px" />
     </div>
     <template v-else-if="providers.length === 0">
-      <EmptyState icon="◆" title="No providers configured" description="Add your first LLM provider to get started.">
+      <EmptyState icon="&#9670;" title="No providers configured" description="Add your first LLM provider to get started.">
         <NButton type="primary" @click="openAdd">+ Add Provider</NButton>
       </EmptyState>
     </template>
@@ -91,6 +158,23 @@ onMounted(loadProviders)
 </template>
 
 <style scoped>
+.defaults-card {
+  margin-bottom: var(--space-4);
+}
+.defaults-row {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.defaults-field {
+  flex: 1;
+  min-width: 200px;
+}
+.defaults-save {
+  flex-shrink: 0;
+  margin-bottom: 2px;
+}
 .provider-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -101,5 +185,6 @@ onMounted(loadProviders)
 }
 @media (max-width: 767px) {
   .provider-grid { grid-template-columns: 1fr; }
+  .defaults-row { flex-direction: column; }
 }
 </style>

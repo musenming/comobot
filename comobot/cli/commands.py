@@ -300,6 +300,12 @@ def gateway(
 
     config = load_config()
     sync_workspace_templates(config.workspace_path)
+
+    # Run storage migration checks before anything accesses data
+    from comobot.utils.migrate import check_and_migrate
+
+    check_and_migrate(get_data_dir(), config.workspace_path)
+
     bus = MessageBus()
     provider = _make_provider(config, require_key=False)
     session_manager = SessionManager(config.workspace_path)
@@ -608,6 +614,11 @@ def agent(
 
     config = load_config()
     sync_workspace_templates(config.workspace_path)
+
+    # Run storage migration checks
+    from comobot.utils.migrate import check_and_migrate
+
+    check_and_migrate(get_data_dir(), config.workspace_path)
 
     bus = MessageBus()
     provider = _make_provider(config)

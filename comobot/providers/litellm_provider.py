@@ -9,6 +9,12 @@ import json_repair
 import litellm
 from litellm import acompletion
 
+# Prevent LiteLLM from fetching remote cost map on import (avoids timeout
+# errors when user has no proxy / restricted network).  Setting this env var
+# *before* first use makes LiteLLM fall back to its bundled local cost map
+# silently — no warning, no delay.
+os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
+
 from comobot.providers.base import LLMProvider, LLMResponse, ToolCallRequest
 from comobot.providers.registry import find_by_model, find_gateway
 

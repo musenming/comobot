@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { NButton, NInput, NForm, NFormItem, NTabs, NTabPane, NSelect, NSpace, NCard, useMessage } from 'naive-ui'
 import PageLayout from '../components/PageLayout.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
@@ -14,18 +14,18 @@ const themeStore = useThemeStore()
 const passwordForm = ref({ new_password: '', confirm_password: '' })
 const savingPassword = ref(false)
 
-// Agent files
-const soulContent = ref('')
-const userContent = ref('')
-const memoryContent = ref('')
+// Agent files — unified editor
+const agentFiles = ref<Record<string, string>>({
+  'SOUL.md': '',
+  'USER.md': '',
+  'AGENTS.md': '',
+})
+const activeAgentFile = ref('SOUL.md')
+const agentPreview = ref(false)
 const savingAgent = ref(false)
-const previewSoul = ref(false)
-const previewUser = ref(false)
 
-// Defaults
-const defaultsForm = ref({ model: '', provider: 'auto' })
-const savingDefaults = ref(false)
-const providerOptions = ref<{ label: string; value: string }[]>([{ label: 'Auto', value: 'auto' }])
+// Memory (read only)
+const memoryContent = ref('')
 
 // Danger zone
 const showClearMemory = ref(false)
@@ -36,29 +36,29 @@ const themeOptions = [
   { label: 'System', value: 'system' },
 ]
 
+const agentFileOptions = [
+  { label: 'SOUL.md', value: 'SOUL.md' },
+  { label: 'USER.md', value: 'USER.md' },
+  { label: 'AGENTS.md', value: 'AGENTS.md' },
+]
+
+const currentContent = computed({
+  get: () => agentFiles.value[activeAgentFile.value] || '',
+  set: (v: string) => { agentFiles.value[activeAgentFile.value] = v },
+})
+
 onMounted(async () => {
   try {
-    const [soul, user, memory, defaults, providers] = await Promise.all([
+    const [soul, user, agents, memory] = await Promise.all([
       api.get('/settings/soul'),
       api.get('/settings/user'),
+      api.get('/settings/agents').catch(() => ({ data: { content: '' } })),
       api.get('/settings/memory'),
-      api.get('/settings/defaults').catch(() => null),
-      api.get('/providers').catch(() => null),
     ])
-    soulContent.value = soul.data.content || ''
-    userContent.value = user.data.content || ''
+    agentFiles.value['SOUL.md'] = soul.data.content || ''
+    agentFiles.value['USER.md'] = user.data.content || ''
+    agentFiles.value['AGENTS.md'] = agents.data.content || ''
     memoryContent.value = memory.data.content || ''
-    if (defaults?.data) {
-      defaultsForm.value.model = defaults.data.model || ''
-      defaultsForm.value.provider = defaults.data.provider || 'auto'
-    }
-    if (providers?.data) {
-      const opts = [{ label: 'Auto', value: 'auto' }]
-      for (const p of providers.data) {
-        opts.push({ label: p.provider, value: p.provider })
-      }
-      providerOptions.value = opts
-    }
   } catch {
     // May fail if files don't exist yet
   }
@@ -85,39 +85,21 @@ async function savePassword() {
   }
 }
 
-async function saveSoul() {
+async function saveAgentFile() {
   savingAgent.value = true
+  const fileMap: Record<string, string> = {
+    'SOUL.md': '/settings/soul',
+    'USER.md': '/settings/user',
+    'AGENTS.md': '/settings/agents',
+  }
+  const endpoint = fileMap[activeAgentFile.value]
   try {
-    await api.put('/settings/soul', { content: soulContent.value })
-    message.success('SOUL.md saved')
+    await api.put(endpoint, { content: currentContent.value })
+    message.success(`${activeAgentFile.value} saved`)
   } catch {
     message.error('Failed to save')
   } finally {
     savingAgent.value = false
-  }
-}
-
-async function saveUser() {
-  savingAgent.value = true
-  try {
-    await api.put('/settings/user', { content: userContent.value })
-    message.success('USER.md saved')
-  } catch {
-    message.error('Failed to save')
-  } finally {
-    savingAgent.value = false
-  }
-}
-
-async function saveDefaults() {
-  savingDefaults.value = true
-  try {
-    await api.put('/settings/defaults', defaultsForm.value)
-    message.success('Defaults saved')
-  } catch (e: any) {
-    message.error(e.response?.data?.detail || 'Failed to save defaults')
-  } finally {
-    savingDefaults.value = false
   }
 }
 
@@ -148,52 +130,62 @@ async function handleClearMemory() {
         </div>
 
         <div class="settings-section">
-          <div class="section-header">
-            <h3 class="section-title">Defaults</h3>
-            <NButton size="small" type="primary" :loading="savingDefaults" @click="saveDefaults">Save</NButton>
-          </div>
-          <NForm label-placement="top" style="max-width: 400px">
-            <NFormItem label="Model">
-              <NInput v-model:value="defaultsForm.model" placeholder="e.g. anthropic/claude-opus-4-5" />
-            </NFormItem>
-            <NFormItem label="Provider">
-              <NSelect v-model:value="defaultsForm.provider" :options="providerOptions" />
-            </NFormItem>
-          </NForm>
+          <p class="section-note">Model and provider defaults have been moved to the <strong>Providers</strong> page.</p>
         </div>
       </NTabPane>
 
       <!-- Agent -->
       <NTabPane name="agent" tab="Agent">
-        <div class="settings-section">
-          <div class="section-header">
-            <h3 class="section-title">SOUL.md</h3>
-            <NSpace>
-              <NButton size="small" quaternary @click="previewSoul = !previewSoul">
-                {{ previewSoul ? 'Edit' : 'Preview' }}
+        <div class="agent-editor">
+          <!-- File selector bar -->
+          <div class="editor-toolbar">
+            <div class="file-tabs">
+              <button
+                v-for="opt in agentFileOptions"
+                :key="opt.value"
+                class="file-tab"
+                :class="{ active: activeAgentFile === opt.value }"
+                @click="activeAgentFile = opt.value; agentPreview = false"
+              >
+                {{ opt.label }}
+              </button>
+            </div>
+            <NSpace :size="8">
+              <NButton
+                size="small"
+                quaternary
+                @click="agentPreview = !agentPreview"
+              >
+                {{ agentPreview ? 'Edit' : 'Preview' }}
               </NButton>
-              <NButton size="small" type="primary" :loading="savingAgent" @click="saveSoul">Save</NButton>
+              <NButton
+                size="small"
+                type="primary"
+                :loading="savingAgent"
+                @click="saveAgentFile"
+              >
+                Save
+              </NButton>
             </NSpace>
           </div>
-          <MarkdownRenderer v-if="previewSoul" :content="soulContent" />
-          <NInput v-else v-model:value="soulContent" type="textarea" :rows="12" placeholder="Agent personality..." />
-        </div>
 
-        <div class="settings-section">
-          <div class="section-header">
-            <h3 class="section-title">USER.md</h3>
-            <NSpace>
-              <NButton size="small" quaternary @click="previewUser = !previewUser">
-                {{ previewUser ? 'Edit' : 'Preview' }}
-              </NButton>
-              <NButton size="small" type="primary" :loading="savingAgent" @click="saveUser">Save</NButton>
-            </NSpace>
+          <!-- Editor / Preview -->
+          <div class="editor-body">
+            <div v-if="agentPreview" class="md-preview">
+              <MarkdownRenderer :content="currentContent || '*Empty file*'" />
+            </div>
+            <NInput
+              v-else
+              v-model:value="currentContent"
+              type="textarea"
+              :rows="18"
+              :placeholder="`Edit ${activeAgentFile}...`"
+              class="editor-textarea"
+            />
           </div>
-          <MarkdownRenderer v-if="previewUser" :content="userContent" />
-          <NInput v-else v-model:value="userContent" type="textarea" :rows="8" placeholder="User info..." />
         </div>
 
-        <div class="settings-section">
+        <div class="settings-section" style="margin-top: var(--space-6)">
           <h3 class="section-title">MEMORY.md (Read Only)</h3>
           <div class="memory-viewer">
             <MarkdownRenderer :content="memoryContent || 'No memories yet.'" />
@@ -260,6 +252,73 @@ async function handleClearMemory() {
 .section-header .section-title {
   margin-bottom: 0;
 }
+.section-note {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+/* Agent editor */
+.agent-editor {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--surface);
+}
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-muted);
+  border-bottom: 1px solid var(--border);
+}
+.file-tabs {
+  display: flex;
+  gap: 2px;
+}
+.file-tab {
+  background: none;
+  border: none;
+  padding: 4px 12px;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all 150ms;
+}
+.file-tab:hover {
+  color: var(--text-primary);
+  background: var(--surface);
+}
+.file-tab.active {
+  color: var(--text-primary);
+  background: var(--surface);
+  font-weight: 500;
+  box-shadow: var(--shadow-sm);
+}
+.editor-body {
+  min-height: 400px;
+}
+.editor-body :deep(.n-input) {
+  border: none;
+  border-radius: 0;
+}
+.editor-body :deep(.n-input__border),
+.editor-body :deep(.n-input__state-border) {
+  display: none;
+}
+.editor-textarea :deep(textarea) {
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace !important;
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+}
+.md-preview {
+  padding: var(--space-4) var(--space-6);
+  min-height: 400px;
+  overflow-y: auto;
+}
+
 .memory-viewer {
   background: var(--bg-muted);
   border: 1px solid var(--border);

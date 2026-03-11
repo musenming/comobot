@@ -108,6 +108,20 @@ async def update_user_md(
     return {"updated": True}
 
 
+@router.get("/agents")
+async def get_agents_md(_user: str = Depends(get_current_user)):
+    return {"content": _read_file("AGENTS.md")}
+
+
+@router.put("/agents")
+async def update_agents_md(
+    body: FileContentRequest,
+    _user: str = Depends(get_current_user),
+):
+    _write_file("AGENTS.md", body.content)
+    return {"updated": True}
+
+
 @router.get("/memory")
 async def get_memory(_user: str = Depends(get_current_user)):
     return {"content": _read_file("workspace/MEMORY.md")}
