@@ -183,7 +183,11 @@
       "Bash(.venv/bin/pytest tests/ -v -x --timeout=30 2>&1 | tail -30)",
       "Bash(.venv/bin/pytest tests/ -v -x 2>&1 | tail -30)",
       "Bash(.venv/bin/pytest tests/ -v -k \"setup or channel or provider\" 2>&1 | tail -20)",
-      "Bash(wc -l /home/comobot/comobot/agent/tools/*.py)"
+      "Bash(wc -l /home/comobot/comobot/agent/tools/*.py)",
+      "Bash(brew list:*)",
+      "Bash(conda run:*)",
+      "Bash(.venv/bin/pip install:*)",
+      "Bash(env:*)"
     ]
   }
 }

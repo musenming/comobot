@@ -15,6 +15,7 @@ const chatMessages = ref<ChatMessage[]>([])
 const input = ref('')
 const sending = ref(false)
 const thinking = ref(false)
+const toolHint = ref('')
 const messagesEl = ref<HTMLElement | null>(null)
 
 function scrollToBottom() {
@@ -31,14 +32,20 @@ watch(data, (msg) => {
     thinking.value = true
   } else if (msg.type === 'thinking') {
     thinking.value = true
+  } else if (msg.type === 'tool_hint') {
+    toolHint.value = msg.content
+  } else if (msg.type === 'progress') {
+    // Intermediate thinking text — could display if desired
   } else if (msg.type === 'response') {
     thinking.value = false
     sending.value = false
+    toolHint.value = ''
     chatMessages.value.push({ role: 'assistant', content: msg.content })
     scrollToBottom()
   } else if (msg.type === 'error') {
     thinking.value = false
     sending.value = false
+    toolHint.value = ''
     chatMessages.value.push({ role: 'assistant', content: `Error: ${msg.error}` })
     scrollToBottom()
   }
@@ -77,7 +84,10 @@ function handleKeydown(e: KeyboardEvent) {
           :content="msg.content"
         />
         <div v-if="thinking" class="thinking-indicator">
-          <span class="dot" /><span class="dot" /><span class="dot" />
+          <div v-if="toolHint" class="tool-hint">{{ toolHint }}</div>
+          <div class="thinking-dots">
+            <span class="dot" /><span class="dot" /><span class="dot" />
+          </div>
         </div>
       </div>
       <div class="chat-input-area">
@@ -154,8 +164,23 @@ function handleKeydown(e: KeyboardEvent) {
 }
 .thinking-indicator {
   display: flex;
+  flex-direction: column;
   gap: 4px;
   padding: var(--space-3) var(--space-4);
+}
+.tool-hint {
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  opacity: 0.8;
+  padding: 2px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.thinking-dots {
+  display: flex;
+  gap: 4px;
 }
 .dot {
   width: 6px;

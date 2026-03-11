@@ -165,7 +165,20 @@ async def ws_chat(websocket: WebSocket):
                             }
                         )
 
-                        response = await agent.process_direct(content, session_key=session_key)
+                        async def on_progress(
+                            prog_content: str, *, tool_hint: bool = False
+                        ):
+                            await websocket.send_json(
+                                {
+                                    "type": "tool_hint" if tool_hint else "progress",
+                                    "session_key": session_key,
+                                    "content": prog_content,
+                                }
+                            )
+
+                        response = await agent.process_direct(
+                            content, session_key=session_key, on_progress=on_progress
+                        )
                         response_text = response if isinstance(response, str) else str(response)
 
                         # Store assistant message
