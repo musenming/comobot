@@ -217,6 +217,57 @@ class ChannelsConfig(Base):
     matrix: MatrixConfig = Field(default_factory=MatrixConfig)
 
 
+class HybridSearchConfig(Base):
+    """Hybrid search (BM25 + vector) configuration."""
+
+    enabled: bool = True
+    vector_weight: float = 0.7
+    text_weight: float = 0.3
+    candidate_multiplier: int = 4
+
+
+class TemporalDecayConfig(Base):
+    """Temporal decay for recency boosting."""
+
+    enabled: bool = True
+    half_life_days: int = 30
+
+
+class MMRConfig(Base):
+    """MMR re-ranking for diversity."""
+
+    enabled: bool = False
+    lambda_param: float = 0.7  # 0 = max diversity, 1 = max relevance
+
+
+class MemorySearchConfig(Base):
+    """Memory search configuration."""
+
+    enabled: bool = True
+    provider: str = "auto"  # auto, openai, litellm — embedding provider
+    model: str = "text-embedding-3-small"  # embedding model name
+    max_results: int = 5
+    chunk_target_tokens: int = 400
+    chunk_overlap_tokens: int = 80
+    hybrid: HybridSearchConfig = Field(default_factory=HybridSearchConfig)
+    temporal_decay: TemporalDecayConfig = Field(default_factory=TemporalDecayConfig)
+    mmr: MMRConfig = Field(default_factory=MMRConfig)
+
+
+class MemoryFlushConfig(Base):
+    """Pre-compaction memory flush configuration."""
+
+    enabled: bool = True
+    soft_threshold_ratio: float = 0.8  # Flush when unconsolidated >= memory_window * ratio
+
+
+class MemoryConfig(Base):
+    """Memory system configuration."""
+
+    search: MemorySearchConfig = Field(default_factory=MemorySearchConfig)
+    flush: MemoryFlushConfig = Field(default_factory=MemoryFlushConfig)
+
+
 class AgentDefaults(Base):
     """Default agent configuration."""
 
@@ -230,6 +281,7 @@ class AgentDefaults(Base):
     max_tool_iterations: int = 40
     memory_window: int = 100
     reasoning_effort: str | None = None  # low / medium / high — enables LLM thinking mode
+    memory: MemoryConfig = Field(default_factory=MemoryConfig)
 
 
 class AgentsConfig(Base):

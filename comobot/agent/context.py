@@ -58,7 +58,7 @@ Skills with available="false" need dependencies installed first - you can try in
         system = platform.system()
         runtime = f"{'macOS' if system == 'Darwin' else system} {platform.machine()}, Python {platform.python_version()}"
 
-        return f"""# comobot 🐈
+        return f"""# comobot 🤖
 
 You are comobot, a helpful AI assistant.
 
@@ -68,8 +68,15 @@ You are comobot, a helpful AI assistant.
 ## Workspace
 Your workspace is at: {workspace_path}
 - Long-term memory: {workspace_path}/memory/MEMORY.md (write important facts here)
-- History log: {workspace_path}/memory/HISTORY.md (grep-searchable). Each entry starts with [YYYY-MM-DD HH:MM].
+- Daily logs: {workspace_path}/memory/YYYY-MM-DD.md (daily notes, auto-loaded for today + yesterday)
 - Custom skills: {workspace_path}/skills/{{skill-name}}/SKILL.md
+
+## Memory
+- Use `memory_search` to recall past conversations, decisions, and context.
+- Use `memory_get` to read a specific memory file after search.
+- Write important facts to MEMORY.md using edit_file or write_file.
+- Day-to-day notes go to memory/YYYY-MM-DD.md (today's date).
+- If someone says "remember this," write it to a memory file immediately.
 
 ## comobot Guidelines
 - State intent before tool calls, but NEVER predict or claim results before receiving them.

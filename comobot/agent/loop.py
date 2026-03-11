@@ -14,9 +14,11 @@ from loguru import logger
 
 from comobot.agent.context import ContextBuilder
 from comobot.agent.memory import MemoryStore
+from comobot.agent.memory_search import MemorySearchEngine
 from comobot.agent.subagent import SubagentManager
 from comobot.agent.tools.cron import CronTool
 from comobot.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
+from comobot.agent.tools.memory_tools import MemoryGetTool, MemorySearchTool
 from comobot.agent.tools.message import MessageTool
 from comobot.agent.tools.registry import ToolRegistry
 from comobot.agent.tools.shell import ExecTool
@@ -28,7 +30,7 @@ from comobot.providers.base import LLMProvider
 from comobot.session.manager import Session, SessionManager
 
 if TYPE_CHECKING:
-    from comobot.config.schema import ChannelsConfig, ExecToolConfig
+    from comobot.config.schema import ChannelsConfig, ExecToolConfig, MemoryConfig
     from comobot.cron.service import CronService
 
 
@@ -65,8 +67,9 @@ class AgentLoop:
         session_manager: SessionManager | None = None,
         mcp_servers: dict | None = None,
         channels_config: ChannelsConfig | None = None,
+        memory_config: MemoryConfig | None = None,
     ):
-        from comobot.config.schema import ExecToolConfig
+        from comobot.config.schema import ExecToolConfig, MemoryConfig
 
         self.bus = bus
         self.channels_config = channels_config
@@ -83,6 +86,7 @@ class AgentLoop:
         self.exec_config = exec_config or ExecToolConfig()
         self.cron_service = cron_service
         self.restrict_to_workspace = restrict_to_workspace
+        self.memory_config = memory_config or MemoryConfig()
 
         self.context = ContextBuilder(workspace)
         self.sessions = session_manager or SessionManager(workspace)
@@ -115,8 +119,75 @@ class AgentLoop:
         self._session_locks: weakref.WeakValueDictionary[str, asyncio.Lock] = (
             weakref.WeakValueDictionary()
         )
+        self._memory_flushed: set[str] = set()  # Session keys that have been flushed this cycle
         self.orchestrator = None  # Optional WorkflowEngine for orchestrated flows
+
+        # Initialize memory search engine
+        self._memory_engine = self._init_memory_engine()
         self._register_default_tools()
+
+    def _init_memory_engine(self) -> MemorySearchEngine | None:
+        """Initialize the memory search engine based on config."""
+        cfg = self.memory_config.search
+        if not cfg.enabled:
+            return None
+
+        try:
+            engine = MemorySearchEngine(
+                workspace=self.workspace,
+                chunk_target_tokens=cfg.chunk_target_tokens,
+                chunk_overlap_tokens=cfg.chunk_overlap_tokens,
+                vector_weight=cfg.hybrid.vector_weight,
+                text_weight=cfg.hybrid.text_weight,
+                candidate_multiplier=cfg.hybrid.candidate_multiplier,
+                temporal_decay_enabled=cfg.temporal_decay.enabled,
+                half_life_days=cfg.temporal_decay.half_life_days,
+                mmr_enabled=cfg.mmr.enabled,
+                mmr_lambda=cfg.mmr.lambda_param,
+                embedding_fn=self._build_embedding_fn(),
+            )
+            # Initial index build
+            engine.reindex()
+            return engine
+        except Exception:
+            logger.exception("Failed to initialize memory search engine")
+            return None
+
+    def _build_embedding_fn(self):
+        """Build an embedding function from config. Returns None if unavailable."""
+        cfg = self.memory_config.search
+        if cfg.provider == "none":
+            return None
+
+        try:
+            import litellm
+
+            model = cfg.model
+
+            def _embed(text: str) -> list[float] | None:
+                try:
+                    resp = litellm.embedding(model=model, input=[text])
+                    return resp.data[0]["embedding"]
+                except Exception:
+                    return None
+
+            # Test if embedding works
+            test = _embed("test")
+            if test:
+                logger.info("Memory search: embedding via litellm/{}", model)
+                return _embed
+        except Exception:
+            logger.debug("Embedding not available, using BM25-only search")
+
+        return None
+
+    def _reindex_memory(self) -> None:
+        """Reindex memory files (call after memory writes)."""
+        if self._memory_engine:
+            try:
+                self._memory_engine.reindex()
+            except Exception:
+                logger.debug("Memory reindex failed")
 
     def _register_default_tools(self) -> None:
         """Register the default set of tools."""
@@ -137,6 +208,11 @@ class AgentLoop:
         self.tools.register(SpawnTool(manager=self.subagents))
         if self.cron_service:
             self.tools.register(CronTool(self.cron_service))
+
+        # Memory tools
+        if self._memory_engine:
+            self.tools.register(MemorySearchTool(self._memory_engine))
+        self.tools.register(MemoryGetTool(self.workspace))
 
     async def _connect_mcp(self) -> None:
         """Connect to configured MCP servers (one-time, lazy)."""
@@ -459,18 +535,38 @@ class AgentLoop:
             return OutboundMessage(
                 channel=msg.channel,
                 chat_id=msg.chat_id,
-                content="🐈 comobot commands:\n/new — Start a new conversation\n/stop — Stop the current task\n/help — Show available commands",
+                content="🤖 comobot commands:\n/new — Start a new conversation\n/stop — Stop the current task\n/help — Show available commands",
             )
 
         unconsolidated = len(session.messages) - session.last_consolidated
+
+        # Pre-compaction memory flush: save durable memories before consolidation
+        flush_cfg = self.memory_config.flush
+        if (
+            flush_cfg.enabled
+            and session.key not in self._memory_flushed
+            and unconsolidated >= int(self.memory_window * flush_cfg.soft_threshold_ratio)
+            and unconsolidated < self.memory_window
+        ):
+            self._memory_flushed.add(session.key)
+            try:
+                await MemoryStore(self.workspace).memory_flush(
+                    session, self.provider, self.model
+                )
+                self._reindex_memory()
+            except Exception:
+                logger.debug("Memory flush failed, continuing")
+
         if unconsolidated >= self.memory_window and session.key not in self._consolidating:
             self._consolidating.add(session.key)
+            self._memory_flushed.discard(session.key)  # Reset flush for next cycle
             lock = self._consolidation_locks.setdefault(session.key, asyncio.Lock())
 
             async def _consolidate_and_unlock():
                 try:
                     async with lock:
                         await self._consolidate_memory(session)
+                        self._reindex_memory()  # Reindex after consolidation writes
                 finally:
                     self._consolidating.discard(session.key)
                     _task = asyncio.current_task()
