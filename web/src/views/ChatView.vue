@@ -144,14 +144,14 @@ watch(data, (msg) => {
     })
     // Mark previous step as done
     if (activeToolSteps.value.length > 1) {
-      activeToolSteps.value[activeToolSteps.value.length - 2].done = true
+      activeToolSteps.value[activeToolSteps.value.length - 2]!.done = true
     }
     scrollToBottom()
   } else if (msg.type === 'progress') {
     // Update the last tool step content
     if (activeToolSteps.value.length > 0) {
       const last = activeToolSteps.value[activeToolSteps.value.length - 1]
-      last.content = msg.content
+      last!.content = msg.content
     }
   } else if (msg.type === 'response') {
     thinking.value = false

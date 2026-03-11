@@ -93,6 +93,7 @@ async function saveAgentFile() {
     'AGENTS.md': '/settings/agents',
   }
   const endpoint = fileMap[activeAgentFile.value]
+  if (!endpoint) return
   try {
     await api.put(endpoint, { content: currentContent.value })
     message.success(`${activeAgentFile.value} saved`)
