@@ -1,12 +1,12 @@
 """Cron job management endpoints."""
 
-import json
+import time
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from comobot.api.deps import get_current_user, get_db
-from comobot.db.connection import Database
+from comobot.api.deps import get_current_user
 
 router = APIRouter(prefix="/api/cron")
 
@@ -25,144 +25,183 @@ class CronUpdate(BaseModel):
     description: str | None = None
 
 
+def _get_cron_service(request: Request):
+    """Get the CronService from app state."""
+    cron = getattr(request.app.state, "cron", None)
+    if cron is None:
+        raise HTTPException(status_code=503, detail="Cron service not available")
+    return cron
+
+
+def _format_schedule_display(schedule) -> str:
+    """Format schedule for frontend display."""
+    if schedule.kind == "cron" and schedule.expr:
+        return schedule.expr
+    elif schedule.kind == "at" and schedule.at_ms:
+        return datetime.fromtimestamp(schedule.at_ms / 1000, tz=timezone.utc).isoformat()
+    elif schedule.kind == "every" and schedule.every_ms:
+        sec = schedule.every_ms / 1000
+        if sec < 60:
+            return f"every {int(sec)}s"
+        elif sec < 3600:
+            return f"every {int(sec / 60)}m"
+        else:
+            return f"every {int(sec / 3600)}h"
+    return ""
+
+
+def _format_next_run(next_run_at_ms: int | None) -> str | None:
+    """Convert next_run_at_ms to ISO string for frontend."""
+    if next_run_at_ms is None:
+        return None
+    return datetime.fromtimestamp(next_run_at_ms / 1000, tz=timezone.utc).isoformat()
+
+
+def _format_last_run(last_run_at_ms: int | None) -> str | None:
+    """Convert last_run_at_ms to ISO string for frontend."""
+    if last_run_at_ms is None:
+        return None
+    return datetime.fromtimestamp(last_run_at_ms / 1000, tz=timezone.utc).isoformat()
+
+
+def _job_to_dict(job) -> dict:
+    """Convert a CronJob to a frontend-friendly dict."""
+    return {
+        "id": job.id,
+        "name": job.name,
+        "enabled": job.enabled,
+        "schedule": {
+            "kind": job.schedule.kind,
+            "expr": job.schedule.expr,
+            "atMs": job.schedule.at_ms,
+            "everyMs": job.schedule.every_ms,
+            "tz": job.schedule.tz,
+        },
+        "schedule_display": _format_schedule_display(job.schedule),
+        "payload": {
+            "kind": job.payload.kind,
+            "message": job.payload.message,
+            "deliver": job.payload.deliver,
+            "channel": job.payload.channel,
+            "to": job.payload.to,
+        },
+        "payload_summary": job.payload.message,
+        "next_run_at": _format_next_run(job.state.next_run_at_ms),
+        "last_run_at": _format_last_run(job.state.last_run_at_ms),
+        "last_status": job.state.last_status,
+        "last_error": job.state.last_error,
+        "created_at": datetime.fromtimestamp(
+            job.created_at_ms / 1000, tz=timezone.utc
+        ).isoformat()
+        if job.created_at_ms
+        else None,
+    }
+
+
 @router.get("")
 async def list_cron_jobs(
-    db: Database = Depends(get_db),
+    request: Request,
     _user: str = Depends(get_current_user),
 ):
-    rows = await db.fetchall("SELECT * FROM cron_jobs ORDER BY created_at DESC")
-    results = []
-    for row in rows:
-        item = dict(row)
-        # Parse schedule and payload JSON for frontend display
-        try:
-            sched = json.loads(row["schedule"]) if isinstance(row["schedule"], str) else {}
-        except (json.JSONDecodeError, TypeError):
-            sched = {}
-        try:
-            payload = json.loads(row["payload"]) if isinstance(row["payload"], str) else {}
-        except (json.JSONDecodeError, TypeError):
-            payload = {}
-
-        # Provide a schedule_display for the frontend
-        if sched.get("kind") == "cron" and sched.get("expr"):
-            item["schedule_display"] = sched["expr"]
-        elif sched.get("kind") == "at" and sched.get("atMs"):
-            from datetime import datetime, timezone
-
-            item["schedule_display"] = datetime.fromtimestamp(
-                sched["atMs"] / 1000, tz=timezone.utc
-            ).isoformat()
-        elif sched.get("kind") == "every" and sched.get("everyMs"):
-            sec = sched["everyMs"] / 1000
-            if sec < 60:
-                item["schedule_display"] = f"every {int(sec)}s"
-            elif sec < 3600:
-                item["schedule_display"] = f"every {int(sec / 60)}m"
-            else:
-                item["schedule_display"] = f"every {int(sec / 3600)}h"
-        else:
-            item["schedule_display"] = row.get("schedule", "")
-
-        # Provide payload summary
-        item["payload_summary"] = payload.get("message", "")
-        results.append(item)
-    return results
+    cron = _get_cron_service(request)
+    jobs = await cron.list_jobs(include_disabled=True)
+    return [_job_to_dict(job) for job in jobs]
 
 
 @router.post("")
 async def create_cron_job(
     body: CronCreate,
-    db: Database = Depends(get_db),
+    request: Request,
     _user: str = Depends(get_current_user),
 ):
-    # Build schedule and payload JSON from user-friendly fields
-    schedule_json = json.dumps({"kind": "cron", "expr": body.expression})
-    payload_json = json.dumps(
-        {
-            "kind": "agent_turn",
-            "message": body.command,
-            "deliver": False,
-        }
+    from comobot.cron.types import CronSchedule
+
+    cron = _get_cron_service(request)
+    schedule = CronSchedule(kind="cron", expr=body.expression)
+    job = await cron.add_job(
+        name=body.name,
+        schedule=schedule,
+        message=body.command,
     )
-    cursor = await db.execute(
-        "INSERT INTO cron_jobs (name, schedule, payload) VALUES (?, ?, ?)",
-        (body.name, schedule_json, payload_json),
-    )
-    return {"id": cursor.lastrowid, "name": body.name}
+    return {"id": job.id, "name": job.name}
 
 
 @router.put("/{job_id}")
 async def update_cron_job(
-    job_id: int,
+    job_id: str,
     body: CronUpdate,
-    db: Database = Depends(get_db),
+    request: Request,
     _user: str = Depends(get_current_user),
 ):
-    updates = []
-    params = []
+    cron = _get_cron_service(request)
+    # Load the job, update fields, and save
+    jobs = await cron.list_jobs(include_disabled=True)
+    target = None
+    for j in jobs:
+        if str(j.id) == str(job_id):
+            target = j
+            break
+    if not target:
+        raise HTTPException(status_code=404, detail="Cron job not found")
+
     if body.name is not None:
-        updates.append("name = ?")
-        params.append(body.name)
+        target.name = body.name
     if body.expression is not None:
-        schedule_json = json.dumps({"kind": "cron", "expr": body.expression})
-        updates.append("schedule = ?")
-        params.append(schedule_json)
+        from comobot.cron.types import CronSchedule
+
+        target.schedule = CronSchedule(kind="cron", expr=body.expression)
     if body.command is not None:
-        payload_json = json.dumps(
-            {
-                "kind": "agent_turn",
-                "message": body.command,
-                "deliver": False,
-            }
-        )
-        updates.append("payload = ?")
-        params.append(payload_json)
+        target.payload.message = body.command
 
-    if not updates:
-        raise HTTPException(status_code=400, detail="No fields to update")
-
-    params.append(job_id)
-    await db.execute(f"UPDATE cron_jobs SET {', '.join(updates)} WHERE id = ?", tuple(params))
+    target.updated_at_ms = int(time.time() * 1000)
+    await cron._save_store()
     return {"id": job_id, "updated": True}
 
 
 @router.post("/{job_id}/run")
 async def manual_run(
-    job_id: int,
-    db: Database = Depends(get_db),
+    job_id: str,
+    request: Request,
     _user: str = Depends(get_current_user),
 ):
-    job = await db.fetchone("SELECT * FROM cron_jobs WHERE id = ?", (job_id,))
-    if not job:
+    cron = _get_cron_service(request)
+    success = await cron.run_job(str(job_id), force=True)
+    if not success:
         raise HTTPException(status_code=404, detail="Cron job not found")
-    # Mark as manually triggered
-    await db.execute(
-        "UPDATE cron_jobs SET last_run_at = datetime('now'), last_status = 'running' WHERE id = ?",
-        (job_id,),
-    )
     return {"id": job_id, "status": "triggered"}
 
 
 @router.put("/{job_id}/toggle")
 async def toggle_cron_job(
-    job_id: int,
-    db: Database = Depends(get_db),
+    job_id: str,
+    request: Request,
     _user: str = Depends(get_current_user),
 ):
-    job = await db.fetchone("SELECT enabled FROM cron_jobs WHERE id = ?", (job_id,))
-    if not job:
+    cron = _get_cron_service(request)
+    jobs = await cron.list_jobs(include_disabled=True)
+    target = None
+    for j in jobs:
+        if str(j.id) == str(job_id):
+            target = j
+            break
+    if not target:
         raise HTTPException(status_code=404, detail="Cron job not found")
-    new_state = 0 if job["enabled"] else 1
-    await db.execute("UPDATE cron_jobs SET enabled = ? WHERE id = ?", (new_state, job_id))
-    return {"id": job_id, "enabled": bool(new_state)}
+
+    new_state = not target.enabled
+    result = await cron.enable_job(str(job_id), new_state)
+    if not result:
+        raise HTTPException(status_code=404, detail="Cron job not found")
+    return {"id": job_id, "enabled": new_state}
 
 
 @router.delete("/{job_id}")
 async def delete_cron_job(
-    job_id: int,
-    db: Database = Depends(get_db),
+    job_id: str,
+    request: Request,
     _user: str = Depends(get_current_user),
 ):
-    await db.execute("DELETE FROM cron_jobs WHERE id = ?", (job_id,))
+    cron = _get_cron_service(request)
+    removed = await cron.remove_job(str(job_id))
+    if not removed:
+        raise HTTPException(status_code=404, detail="Cron job not found")
     return {"deleted": True}

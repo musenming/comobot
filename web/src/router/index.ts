@@ -138,12 +138,23 @@ router.beforeEach(async (to) => {
   // Verify token validity once per page load
   if (to.meta.requiresAuth && token && !tokenVerified) {
     try {
-      const res = await fetch('/api/settings', {
+      const res = await fetch('/api/auth/refresh', {
+        method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       })
       if (res.status === 401) {
         localStorage.removeItem('token')
         return '/login'
+      }
+      if (res.ok) {
+        try {
+          const data = await res.json()
+          if (data.access_token) {
+            localStorage.setItem('token', data.access_token)
+          }
+        } catch {
+          // ignore parse errors
+        }
       }
       tokenVerified = true
     } catch {

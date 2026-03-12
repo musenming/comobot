@@ -372,10 +372,11 @@ def gateway(
             channel_name = job.payload.channel or "cli"
 
             if channel_name == "web":
-                # Deliver to web frontend via WebSocket cron notification
+                # Deliver to web frontend via WebSocket
                 from comobot.api.routes.ws import get_ws_manager
 
                 ws_mgr = get_ws_manager()
+                # Notify cron view
                 await ws_mgr.broadcast_cron(
                     {
                         "type": "job_notification",
@@ -384,6 +385,19 @@ def gateway(
                         "session_key": job.payload.to,
                     }
                 )
+                # Also deliver to the chat view as a response message
+                if job.payload.to and response:
+                    await ws_mgr.broadcast_chat(
+                        job.payload.to,
+                        {
+                            "type": "response",
+                            "session_key": job.payload.to,
+                            "content": (
+                                f"**[Scheduled Task: {job.name}]**\n\n{response}"
+                            ),
+                            "role": "assistant",
+                        },
+                    )
             else:
                 from comobot.bus.events import OutboundMessage
 
@@ -566,6 +580,7 @@ def gateway(
                 agent=agent,
                 channels=channels,
                 bus=bus,
+                cron=cron,
             )
 
             import uvicorn

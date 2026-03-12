@@ -17,6 +17,8 @@ class ConnectionManager:
         self.log_connections: list[WebSocket] = []
         self.status_connections: list[WebSocket] = []
         self.cron_connections: list[WebSocket] = []
+        # Chat connections keyed by session_key
+        self.chat_connections: dict[str, list[WebSocket]] = {}
 
     async def connect_logs(self, ws: WebSocket):
         await ws.accept()
@@ -29,6 +31,19 @@ class ConnectionManager:
     async def connect_cron(self, ws: WebSocket):
         await ws.accept()
         self.cron_connections.append(ws)
+
+    def register_chat(self, session_key: str, ws: WebSocket):
+        if session_key not in self.chat_connections:
+            self.chat_connections[session_key] = []
+        if ws not in self.chat_connections[session_key]:
+            self.chat_connections[session_key].append(ws)
+
+    def unregister_chat(self, ws: WebSocket):
+        for key in list(self.chat_connections):
+            if ws in self.chat_connections[key]:
+                self.chat_connections[key].remove(ws)
+            if not self.chat_connections[key]:
+                del self.chat_connections[key]
 
     def disconnect_logs(self, ws: WebSocket):
         if ws in self.log_connections:
@@ -72,6 +87,18 @@ class ConnectionManager:
                 disconnected.append(ws)
         for ws in disconnected:
             self.disconnect_cron(ws)
+
+    async def broadcast_chat(self, session_key: str, data: dict):
+        """Send a message to all chat WebSocket clients for a given session."""
+        connections = self.chat_connections.get(session_key, [])
+        disconnected = []
+        for ws in connections:
+            try:
+                await ws.send_json(data)
+            except Exception:
+                disconnected.append(ws)
+        for ws in disconnected:
+            self.unregister_chat(ws)
 
 
 manager = ConnectionManager()
@@ -149,6 +176,7 @@ async def ws_chat(websocket: WebSocket):
     """WebSocket endpoint for real-time chat with the agent."""
     await websocket.accept()
     db: Database = websocket.app.state.db
+    current_session_key: str | None = None
 
     try:
         while True:
@@ -158,6 +186,12 @@ async def ws_chat(websocket: WebSocket):
             if msg_type == "message":
                 content = raw.get("content", "").strip()
                 session_key = raw.get("session_key") or f"web:{uuid.uuid4().hex[:12]}"
+
+                # Track this connection's session for cron delivery
+                if session_key != current_session_key:
+                    manager.unregister_chat(websocket)
+                    manager.register_chat(session_key, websocket)
+                    current_session_key = session_key
 
                 if not content:
                     await websocket.send_json({"type": "error", "error": "Empty message"})
@@ -269,9 +303,9 @@ async def ws_chat(websocket: WebSocket):
                 await websocket.send_json({"type": "pong"})
 
     except WebSocketDisconnect:
-        pass
+        manager.unregister_chat(websocket)
     except Exception:
-        pass
+        manager.unregister_chat(websocket)
 
 
 def get_ws_manager() -> ConnectionManager:

@@ -1,9 +1,6 @@
 1. cron job修复（**严重bug**）：
-   - 我在chat对话中设置了一个定时任务，后台也显示“Cron: added job '该睡觉了！晚安~ 🛏️' (f228935b)”，我需要你实现为前端cron jos view板块中立马出现对该任务的展示，需要看到该任务卡片。我需要你帮我实现，在前端展示出未执行的每一个cron job，包括任务开始时间、倒计时，任务摘要；并且只要我一开始设置，前端就会更新有展示；
-   - 检查并确认定时任务开始时间，正确的应该是你的worflow执行完的时间作为起点，如果不是则修改为这个标准；
-   - 帮我实现定时任务到时间点以后，主动发消息给我提醒我，你需要think harder，找到实现方案，并升级。
-2. settings中 Agent板块编辑器板块，我需要你帮我嵌入MdEditorV3编辑器完成对markdown的编辑与修改；然后你应该先读取～/.comobot下三个对应文件的内容，并在前端进行展示，然后可以编辑、保存和preview；
-3.  chat输入框被浏览器识别为密码框，会自动弹出填充密码，影响使用，我需要你帮我修复这个bug，chat框只是正常的对话框
-4.  chat框中的workfow执行框宽度改为现在的1/2；
-5.  目前网站各板块间切换时点击响应时间久，帮我优化响应速度；
+   - 定好的cron jobs，我强烈需要在cron jobs view中进行展示，需要系统自动读取～/.comobot/cron/jobs.json的数据，筛选出还没到点执行的定时任务在前端进行展示；
+   - 到点的定时任务必须在对应的前端chat框里发送对应的消息给用户，在CLI中也有response
+2. settings中 Agent板块编辑器板块，实现读取～/.comobot下三个对应文件内容时报错api/settings:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)；
+3.  chat框中的workfow执行框修改为执行完不折叠；
 

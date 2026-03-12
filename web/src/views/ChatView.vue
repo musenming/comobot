@@ -169,10 +169,7 @@ watch(data, (msg) => {
       toolSteps,
       created_at: new Date().toISOString(),
     })
-    // Auto-collapse the workflow for the new message
-    if (toolSteps) {
-      workflowCollapsed.value[chatMessages.value.length - 1] = true
-    }
+    // Keep workflow expanded after completion (user can collapse manually)
     scrollToBottom()
     loadSessions()  // Refresh sidebar
   } else if (msg.type === 'error') {
