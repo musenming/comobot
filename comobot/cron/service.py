@@ -22,10 +22,22 @@ def _now_ms() -> int:
     return int(time.time() * 1000)
 
 
+_AT_GRACE_MS = 120_000  # 2 minute grace period for "at" jobs with slightly past times
+
+
 def _compute_next_run(schedule: CronSchedule, now_ms: int) -> int | None:
     """Compute next run time in ms."""
     if schedule.kind == "at":
-        return schedule.at_ms if schedule.at_ms and schedule.at_ms > now_ms else None
+        if not schedule.at_ms:
+            return None
+        # Allow a grace period for "at" times that are slightly in the past
+        # (e.g. agent calculates time a few seconds behind due to processing delay)
+        if schedule.at_ms > now_ms:
+            return schedule.at_ms
+        if now_ms - schedule.at_ms <= _AT_GRACE_MS:
+            # Fire immediately for recently-past times
+            return now_ms + 500
+        return None
 
     if schedule.kind == "every":
         if not schedule.every_ms or schedule.every_ms <= 0:

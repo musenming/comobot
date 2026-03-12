@@ -105,7 +105,13 @@ async def list_cron_jobs(
 ):
     cron = _get_cron_service(request)
     jobs = await cron.list_jobs(include_disabled=True)
-    return [_job_to_dict(job) for job in jobs]
+    results = [_job_to_dict(job) for job in jobs]
+    # Sort: enabled + pending jobs first ("online"), completed/disabled last ("offline")
+    results.sort(key=lambda j: (
+        0 if j["enabled"] and j.get("next_run_at") else 1,
+        j.get("next_run_at") or "",
+    ))
+    return results
 
 
 @router.post("")

@@ -340,7 +340,6 @@ def gateway(
     async def on_cron_job(job: CronJob) -> str | None:
         """Execute a cron job through the agent."""
         from comobot.agent.tools.cron import CronTool
-        from comobot.agent.tools.message import MessageTool
 
         reminder_note = (
             "[Scheduled Task] Timer finished.\n\n"
@@ -364,48 +363,42 @@ def gateway(
             if isinstance(cron_tool, CronTool) and cron_token is not None:
                 cron_tool.reset_cron_context(cron_token)
 
-        message_tool = agent.tools.get("message")
-        if isinstance(message_tool, MessageTool) and message_tool._sent_in_turn:
-            return response
+        channel_name = job.payload.channel or "cli"
 
-        if job.payload.deliver and job.payload.to and response:
-            channel_name = job.payload.channel or "cli"
+        # For web channel, always deliver via WebSocket (ChannelManager doesn't handle "web")
+        if channel_name == "web" and job.payload.to and response:
+            from comobot.api.routes.ws import get_ws_manager
 
-            if channel_name == "web":
-                # Deliver to web frontend via WebSocket
-                from comobot.api.routes.ws import get_ws_manager
+            ws_mgr = get_ws_manager()
+            # Notify cron view
+            await ws_mgr.broadcast_cron(
+                {
+                    "type": "job_notification",
+                    "job_name": job.name,
+                    "message": response,
+                    "session_key": job.payload.to,
+                }
+            )
+            # Deliver to the chat view as a response message
+            await ws_mgr.broadcast_chat(
+                job.payload.to,
+                {
+                    "type": "response",
+                    "session_key": job.payload.to,
+                    "content": (
+                        f"**[Scheduled Task: {job.name}]**\n\n{response}"
+                    ),
+                    "role": "assistant",
+                },
+            )
+        elif job.payload.deliver and job.payload.to and response:
+            from comobot.bus.events import OutboundMessage
 
-                ws_mgr = get_ws_manager()
-                # Notify cron view
-                await ws_mgr.broadcast_cron(
-                    {
-                        "type": "job_notification",
-                        "job_name": job.name,
-                        "message": response,
-                        "session_key": job.payload.to,
-                    }
+            await bus.publish_outbound(
+                OutboundMessage(
+                    channel=channel_name, chat_id=job.payload.to, content=response
                 )
-                # Also deliver to the chat view as a response message
-                if job.payload.to and response:
-                    await ws_mgr.broadcast_chat(
-                        job.payload.to,
-                        {
-                            "type": "response",
-                            "session_key": job.payload.to,
-                            "content": (
-                                f"**[Scheduled Task: {job.name}]**\n\n{response}"
-                            ),
-                            "role": "assistant",
-                        },
-                    )
-            else:
-                from comobot.bus.events import OutboundMessage
-
-                await bus.publish_outbound(
-                    OutboundMessage(
-                        channel=channel_name, chat_id=job.payload.to, content=response
-                    )
-                )
+            )
         return response
 
     cron.on_job = on_cron_job

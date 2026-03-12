@@ -195,7 +195,10 @@
       "Bash(.venv/bin/pytest tests/ -x -q 2>&1 | tail -30)",
       "Bash(.venv/bin/pytest tests/ -x -q --ignore=tests/test_matrix_channel.py 2>&1 | tail -20)",
       "Bash(.venv/bin/pytest tests/ -q --ignore=tests/test_matrix_channel.py --ignore=tests/test_context_prompt_cache.py 2>&1 | tail -10)",
-      "Bash(.venv/bin/pytest tests/test_cron_commands.py::test_cron_add_rejects_invalid_timezone -v 2>&1 | tail -15)"
+      "Bash(.venv/bin/pytest tests/test_cron_commands.py::test_cron_add_rejects_invalid_timezone -v 2>&1 | tail -15)",
+      "Bash(.venv/bin/pytest tests/ -x -q --ignore=tests/test_matrix_channel.py --ignore=tests/test_context_prompt_cache.py --ignore=tests/test_memory_consolidation_types.py 2>&1 | tail -10)",
+      "Bash(.venv/bin/pytest tests/ -q --ignore=tests/test_matrix_channel.py --ignore=tests/test_context_prompt_cache.py --ignore=tests/test_memory_consolidation_types.py --ignore=tests/test_cron_commands.py 2>&1 | tail -5)",
+      "Bash(.venv/bin/pytest tests/test_cron_commands.py -v 2>&1 | tail -10)"
     ]
   }
 }

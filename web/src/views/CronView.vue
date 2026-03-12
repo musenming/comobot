@@ -124,9 +124,12 @@ const columns = [
     title: 'Status',
     key: 'enabled',
     width: 80,
-    render: (row: any) => h(StatusBadge, {
-      status: row.enabled ? (row.last_status === 'error' ? 'error' : 'online') : 'offline',
-    }),
+    render: (row: any) => {
+      // Disabled or completed (no next run) jobs show as offline
+      const isOffline = !row.enabled || (!row.next_run_at && row.last_run_at)
+      const st = isOffline ? 'offline' : (row.last_status === 'error' ? 'error' : 'online')
+      return h(StatusBadge, { status: st })
+    },
   },
   {
     title: 'Name',
