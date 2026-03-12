@@ -17,6 +17,8 @@ const deleteConfirm = ref(false)
 const deleteTarget = ref<number | null>(null)
 const now = ref(Date.now())
 let tickTimer: ReturnType<typeof setInterval> | null = null
+let pollTimer: ReturnType<typeof setInterval> | null = null
+let cronWs: WebSocket | null = null
 
 const form = ref({
   name: '',
@@ -25,12 +27,49 @@ const form = ref({
   description: '',
 })
 
+// WebSocket for real-time cron updates
+function connectCronWs() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+  cronWs = new WebSocket(`${proto}//${location.host}/ws/cron`)
+  cronWs.onmessage = (ev) => {
+    try {
+      const data = JSON.parse(ev.data)
+      if (data.type === 'ping') return
+      if (data.type === 'job_added' || data.type === 'job_executed' || data.type === 'job_notification') {
+        // Refresh job list when any cron event occurs
+        loadJobs()
+        if (data.type === 'job_notification' && data.message) {
+          message.info(`Cron: ${data.job_name || 'Task'} completed`, { duration: 5000 })
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+  cronWs.onclose = () => {
+    // Reconnect after 3s
+    setTimeout(() => {
+      if (tickTimer) connectCronWs()
+    }, 3000)
+  }
+}
+
 // Tick every second for countdown
 onMounted(() => {
   tickTimer = setInterval(() => { now.value = Date.now() }, 1000)
+  // Poll every 15s as fallback
+  pollTimer = setInterval(loadJobs, 15000)
+  connectCronWs()
 })
 onUnmounted(() => {
   if (tickTimer) clearInterval(tickTimer)
+  if (pollTimer) clearInterval(pollTimer)
+  tickTimer = null
+  if (cronWs) {
+    cronWs.onclose = null
+    cronWs.close()
+    cronWs = null
+  }
 })
 
 function formatCountdown(nextRunAt: string | null): string {

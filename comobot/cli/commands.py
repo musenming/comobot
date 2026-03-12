@@ -369,16 +369,41 @@ def gateway(
             return response
 
         if job.payload.deliver and job.payload.to and response:
-            from comobot.bus.events import OutboundMessage
+            channel_name = job.payload.channel or "cli"
 
-            await bus.publish_outbound(
-                OutboundMessage(
-                    channel=job.payload.channel or "cli", chat_id=job.payload.to, content=response
+            if channel_name == "web":
+                # Deliver to web frontend via WebSocket cron notification
+                from comobot.api.routes.ws import get_ws_manager
+
+                ws_mgr = get_ws_manager()
+                await ws_mgr.broadcast_cron(
+                    {
+                        "type": "job_notification",
+                        "job_name": job.name,
+                        "message": response,
+                        "session_key": job.payload.to,
+                    }
                 )
-            )
+            else:
+                from comobot.bus.events import OutboundMessage
+
+                await bus.publish_outbound(
+                    OutboundMessage(
+                        channel=channel_name, chat_id=job.payload.to, content=response
+                    )
+                )
         return response
 
     cron.on_job = on_cron_job
+
+    # Wire cron events to WebSocket broadcast (connected after app creation)
+    async def on_cron_event(data: dict) -> None:
+        from comobot.api.routes.ws import get_ws_manager
+
+        ws_mgr = get_ws_manager()
+        await ws_mgr.broadcast_cron(data)
+
+    cron.on_event = on_cron_event
 
     # Create channel manager
     channels = ChannelManager(config, bus)

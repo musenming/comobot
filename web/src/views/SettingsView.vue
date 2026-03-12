@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { NButton, NInput, NForm, NFormItem, NTabs, NTabPane, NSelect, NSpace, NCard, useMessage } from 'naive-ui'
+import { MdEditor, MdPreview } from 'md-editor-v3'
+import 'md-editor-v3/lib/style.css'
 import PageLayout from '../components/PageLayout.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import MarkdownRenderer from '../components/MarkdownRenderer.vue'
@@ -146,19 +148,12 @@ async function handleClearMemory() {
                 :key="opt.value"
                 class="file-tab"
                 :class="{ active: activeAgentFile === opt.value }"
-                @click="activeAgentFile = opt.value; agentPreview = false"
+                @click="activeAgentFile = opt.value"
               >
                 {{ opt.label }}
               </button>
             </div>
             <NSpace :size="8">
-              <NButton
-                size="small"
-                quaternary
-                @click="agentPreview = !agentPreview"
-              >
-                {{ agentPreview ? 'Edit' : 'Preview' }}
-              </NButton>
               <NButton
                 size="small"
                 type="primary"
@@ -170,18 +165,17 @@ async function handleClearMemory() {
             </NSpace>
           </div>
 
-          <!-- Editor / Preview -->
+          <!-- MdEditorV3 -->
           <div class="editor-body">
-            <div v-if="agentPreview" class="md-preview">
-              <MarkdownRenderer :content="currentContent || '*Empty file*'" />
-            </div>
-            <NInput
-              v-else
-              v-model:value="currentContent"
-              type="textarea"
-              :rows="18"
+            <MdEditor
+              v-model="currentContent"
+              :theme="themeStore.isDark ? 'dark' : 'light'"
+              language="en-US"
+              :preview="true"
+              preview-theme="github"
+              :style="{ height: '500px' }"
               :placeholder="`Edit ${activeAgentFile}...`"
-              class="editor-textarea"
+              :toolbars="['bold', 'underline', 'italic', 'strikeThrough', '-', 'title', 'sub', 'sup', 'quote', 'unorderedList', 'orderedList', 'task', '-', 'codeRow', 'code', 'link', 'table', '-', 'revoke', 'next', '=', 'pageFullscreen', 'preview', 'catalog']"
             />
           </div>
         </div>
@@ -189,7 +183,11 @@ async function handleClearMemory() {
         <div class="settings-section" style="margin-top: var(--space-6)">
           <h3 class="section-title">MEMORY.md (Read Only)</h3>
           <div class="memory-viewer">
-            <MarkdownRenderer :content="memoryContent || 'No memories yet.'" />
+            <MdPreview
+              :model-value="memoryContent || 'No memories yet.'"
+              :theme="themeStore.isDark ? 'dark' : 'light'"
+              preview-theme="github"
+            />
           </div>
         </div>
       </NTabPane>
@@ -301,23 +299,9 @@ async function handleClearMemory() {
 .editor-body {
   min-height: 400px;
 }
-.editor-body :deep(.n-input) {
+.editor-body :deep(.md-editor) {
   border: none;
   border-radius: 0;
-}
-.editor-body :deep(.n-input__border),
-.editor-body :deep(.n-input__state-border) {
-  display: none;
-}
-.editor-textarea :deep(textarea) {
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace !important;
-  font-size: 13px !important;
-  line-height: 1.6 !important;
-}
-.md-preview {
-  padding: var(--space-4) var(--space-6);
-  min-height: 400px;
-  overflow-y: auto;
 }
 
 .memory-viewer {

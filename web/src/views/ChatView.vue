@@ -323,6 +323,7 @@ function handleKeydown(e: KeyboardEvent) {
               :autosize="{ minRows: 1, maxRows: 4 }"
               placeholder="Type a message..."
               :disabled="!connected"
+              :input-props="{ autocomplete: 'off', name: 'chat-message', 'data-form-type': 'other' }"
               @keydown="handleKeydown"
             />
             <NButton
@@ -441,6 +442,7 @@ function handleKeydown(e: KeyboardEvent) {
   border-radius: var(--radius-md);
   background: var(--surface);
   overflow: hidden;
+  max-width: 50%;
 }
 .workflow-block.active {
   border-color: var(--accent-blue, #3b82f6);

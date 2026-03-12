@@ -103,6 +103,8 @@ const router = createRouter({
 })
 
 let tokenVerified = false
+let setupChecked = false
+let setupComplete = true
 
 router.beforeEach(async (to) => {
   const token = localStorage.getItem('token')
@@ -112,17 +114,21 @@ router.beforeEach(async (to) => {
     return
   }
 
-  // Check if first-time setup is needed
-  try {
-    const res = await fetch('/api/setup/status')
-    if (res.ok) {
-      const data = await res.json()
-      if (!data.setup_complete) {
-        return '/setup'
+  // Check if first-time setup is needed (only once per session)
+  if (!setupChecked) {
+    try {
+      const res = await fetch('/api/setup/status')
+      if (res.ok) {
+        const data = await res.json()
+        setupComplete = !!data.setup_complete
       }
+      setupChecked = true
+    } catch {
+      // If we can't reach the API, fall through to normal auth check
     }
-  } catch {
-    // If we can't reach the API, fall through to normal auth check
+  }
+  if (!setupComplete) {
+    return '/setup'
   }
 
   if (to.meta.requiresAuth && !token) {

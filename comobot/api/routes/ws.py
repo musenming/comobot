@@ -16,6 +16,7 @@ class ConnectionManager:
     def __init__(self):
         self.log_connections: list[WebSocket] = []
         self.status_connections: list[WebSocket] = []
+        self.cron_connections: list[WebSocket] = []
 
     async def connect_logs(self, ws: WebSocket):
         await ws.accept()
@@ -25,6 +26,10 @@ class ConnectionManager:
         await ws.accept()
         self.status_connections.append(ws)
 
+    async def connect_cron(self, ws: WebSocket):
+        await ws.accept()
+        self.cron_connections.append(ws)
+
     def disconnect_logs(self, ws: WebSocket):
         if ws in self.log_connections:
             self.log_connections.remove(ws)
@@ -32,6 +37,10 @@ class ConnectionManager:
     def disconnect_status(self, ws: WebSocket):
         if ws in self.status_connections:
             self.status_connections.remove(ws)
+
+    def disconnect_cron(self, ws: WebSocket):
+        if ws in self.cron_connections:
+            self.cron_connections.remove(ws)
 
     async def broadcast_log(self, data: dict):
         disconnected = []
@@ -52,6 +61,17 @@ class ConnectionManager:
                 disconnected.append(ws)
         for ws in disconnected:
             self.disconnect_status(ws)
+
+    async def broadcast_cron(self, data: dict):
+        """Broadcast cron events (job_added, job_fired, job_updated)."""
+        disconnected = []
+        for ws in self.cron_connections:
+            try:
+                await ws.send_json(data)
+            except Exception:
+                disconnected.append(ws)
+        for ws in disconnected:
+            self.disconnect_cron(ws)
 
 
 manager = ConnectionManager()
@@ -106,6 +126,22 @@ async def ws_status(websocket: WebSocket):
         manager.disconnect_status(websocket)
     except Exception:
         manager.disconnect_status(websocket)
+
+
+@router.websocket("/ws/cron")
+async def ws_cron(websocket: WebSocket):
+    """Real-time cron job updates via WebSocket."""
+    await manager.connect_cron(websocket)
+    try:
+        while True:
+            try:
+                await asyncio.wait_for(websocket.receive_text(), timeout=30)
+            except asyncio.TimeoutError:
+                await websocket.send_json({"type": "ping"})
+    except WebSocketDisconnect:
+        manager.disconnect_cron(websocket)
+    except Exception:
+        manager.disconnect_cron(websocket)
 
 
 @router.websocket("/ws/chat")
@@ -177,7 +213,11 @@ async def ws_chat(websocket: WebSocket):
                             )
 
                         response = await agent.process_direct(
-                            content, session_key=session_key, on_progress=on_progress
+                            content,
+                            session_key=session_key,
+                            channel="web",
+                            chat_id=session_key,
+                            on_progress=on_progress,
                         )
                         response_text = response if isinstance(response, str) else str(response)
 

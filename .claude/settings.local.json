@@ -188,7 +188,10 @@
       "Bash(conda run:*)",
       "Bash(.venv/bin/pip install:*)",
       "Bash(env:*)",
-      "Bash(ruff format:*)"
+      "Bash(ruff format:*)",
+      "Bash(grep -r \"NInput\" /Users/musen/comobot/web/src/views/*.vue | grep -v \"type=\" | head -5)",
+      "Bash(cd /Users/musen/comobot/web && npm install md-editor-v3 2>&1 | tail -5)",
+      "Bash(npx vite:*)"
     ]
   }
 }

@@ -82,12 +82,32 @@ class CronService:
     ):
         self.store_path = store_path
         self.on_job = on_job
+        self.on_event: Callable[[dict], Coroutine[Any, Any, None]] | None = None
         self.db = db
         self._store: CronStore | None = None
         self._last_mtime: float = 0.0
         self._timer_task: asyncio.Task | None = None
         self._running = False
         self._sqlite_store = None
+
+    async def _emit_event(self, event_type: str, job: CronJob | None = None) -> None:
+        """Emit cron event for WebSocket broadcast."""
+        if self.on_event:
+            data: dict[str, Any] = {"type": event_type}
+            if job:
+                data["job"] = {
+                    "id": job.id,
+                    "name": job.name,
+                    "enabled": job.enabled,
+                    "schedule_kind": job.schedule.kind,
+                    "message": job.payload.message,
+                    "next_run_at_ms": job.state.next_run_at_ms,
+                    "last_status": job.state.last_status,
+                }
+            try:
+                await self.on_event(data)
+            except Exception:
+                pass
 
     def _get_sqlite_store(self):
         """Lazy-init the SQLite store."""
@@ -315,6 +335,7 @@ class CronService:
 
         job.state.last_run_at_ms = start_ms
         job.updated_at_ms = _now_ms()
+        await self._emit_event("job_executed", job)
 
         # Handle one-shot jobs
         if job.schedule.kind == "at":
@@ -381,6 +402,7 @@ class CronService:
 
         self._arm_timer()
         logger.info("Cron: added job '{}' ({})", name, job.id)
+        await self._emit_event("job_added", job)
         return job
 
     async def remove_job(self, job_id: str) -> bool:
