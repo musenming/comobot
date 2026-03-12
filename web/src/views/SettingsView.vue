@@ -5,7 +5,6 @@ import { MdEditor, MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
 import PageLayout from '../components/PageLayout.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
-import MarkdownRenderer from '../components/MarkdownRenderer.vue'
 import { useThemeStore } from '../stores/theme'
 import api from '../api/client'
 
@@ -23,7 +22,6 @@ const agentFiles = ref<Record<string, string>>({
   'AGENTS.md': '',
 })
 const activeAgentFile = ref('SOUL.md')
-const agentPreview = ref(false)
 const savingAgent = ref(false)
 
 // Memory (read only)

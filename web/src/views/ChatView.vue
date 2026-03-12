@@ -323,7 +323,7 @@ function handleKeydown(e: KeyboardEvent) {
               :autosize="{ minRows: 1, maxRows: 4 }"
               placeholder="Type a message..."
               :disabled="!connected"
-              :input-props="{ autocomplete: 'off', name: 'chat-message', 'data-form-type': 'other' }"
+              :input-props="({ autocomplete: 'off', name: 'chat-message', 'data-form-type': 'other' } as any)"
               @keydown="handleKeydown"
             />
             <NButton
