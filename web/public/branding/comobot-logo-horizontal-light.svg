@@ -1,0 +1,25 @@
+<svg width="1200" height="320" viewBox="0 0 1200 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g1" x1="52" y1="36" x2="252" y2="264" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2E6BFF"/>
+      <stop offset="1" stop-color="#00C2FF"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="94" y1="88" x2="206" y2="208" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#111827"/>
+      <stop offset="1" stop-color="#374151"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="320" rx="0" fill="#FFFFFF"/>
+
+  <path d="M152 36C95.7 36 50 81.7 50 138C50 194.3 95.7 240 152 240C191.2 240 225.2 217.6 242 185L213.6 169.2C202 191.4 178.8 206.8 152 206.8C114 206.8 83.2 176 83.2 138C83.2 100 114 69.2 152 69.2C178.3 69.2 201.2 84 213 105.6L241.4 89.8C224.5 57.8 190.7 36 152 36Z" fill="url(#g1)"/>
+  <rect x="96" y="86" width="112" height="116" rx="34" fill="url(#g2)"/>
+  <circle cx="132" cy="132" r="9" fill="#00C2FF"/>
+  <circle cx="170" cy="132" r="9" fill="#00C2FF"/>
+  <rect x="122" y="162" width="58" height="11" rx="5.5" fill="#9CA3AF"/>
+  <rect x="147" y="60" width="10" height="28" rx="5" fill="#2E6BFF"/>
+  <circle cx="152" cy="54" r="8" fill="#00C2FF"/>
+
+  <text x="300" y="144" fill="#111827" font-size="88" font-weight="700" font-family="Inter, Segoe UI, Helvetica Neue, Arial, sans-serif" letter-spacing="0.5">comobot</text>
+  <text x="300" y="208" fill="#6B7280" font-size="36" font-weight="500" font-family="PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif" letter-spacing="1">无为智能科技</text>
+</svg>
