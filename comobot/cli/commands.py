@@ -557,6 +557,12 @@ def gateway(
             await db.connect()
             await run_migrations(db)
 
+            # Wire SQLiteSessionManager for DB sync (external channels → web UI)
+            from comobot.session.sqlite_manager import SQLiteSessionManager
+
+            db_session_manager = SQLiteSessionManager(db)
+            agent.set_db_session_manager(db_session_manager)
+
             # Register Know-how tools now that DB is available
             agent.register_knowhow_tools(db)
 

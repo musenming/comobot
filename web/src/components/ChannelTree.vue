@@ -148,6 +148,8 @@ defineExpose({ reload: load })
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
   padding: var(--space-1) 0 var(--space-4) 0;
 }
 .tree-loading, .tree-empty {
@@ -157,12 +159,15 @@ defineExpose({ reload: load })
   text-align: left;
 }
 .channel-group {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   padding: 0 var(--space-2) var(--space-2);
+  overflow: hidden;
 }
 .channel-header {
-  position: sticky;
-  top: 0;
-  z-index: 4;
+  position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -194,7 +199,7 @@ defineExpose({ reload: load })
   padding-left: var(--space-2);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
 }
 .session-item {
   display: flex;
@@ -207,6 +212,9 @@ defineExpose({ reload: load })
   border-radius: var(--radius-md);
   border-left: 2px solid transparent;
   transition: background 150ms var(--ease-default), border-color 150ms var(--ease-default), color 150ms var(--ease-default);
+}
+.session-item + .session-item {
+  border-top: 1px solid color-mix(in srgb, var(--border) 88%, #9ca3af 12%);
 }
 .session-item:hover {
   background: color-mix(in srgb, var(--bg-muted) 80%, transparent);
@@ -225,7 +233,7 @@ defineExpose({ reload: load })
   gap: var(--space-2);
 }
 .session-title {
-  color: var(--text-secondary);
+  color: color-mix(in srgb, var(--text-primary) 92%, #111 8%);
   font-size: 12px;
   font-weight: 500;
   line-height: 1.25;

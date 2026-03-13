@@ -25,6 +25,7 @@ interface ChatMessage {
 }
 
 const SESSION_STORAGE_KEY = 'comobot-current-session'
+const PAGE_SIZE = 200
 
 const { connected, data, send } = useWebSocket('/ws/chat')
 const sessionWS = useSessionWS()
@@ -36,6 +37,15 @@ const toolHint = ref('')
 const messagesEl = ref<HTMLElement | null>(null)
 const currentSessionKey = ref<string>('')
 const currentSessionTitle = ref<string>('')
+const hasMoreMessages = ref(false)
+const loadingMore = ref(false)
+const currentOffset = ref(0)
+const channelTreeRef = ref<InstanceType<typeof ChannelTree> | null>(null)
+let reloadTimer: ReturnType<typeof setTimeout> | null = null
+function debouncedReloadTree() {
+  if (reloadTimer) clearTimeout(reloadTimer)
+  reloadTimer = setTimeout(() => channelTreeRef.value?.reload(), 1000)
+}
 
 // Active workflow steps collected during a single assistant turn
 const activeToolSteps = ref<ToolStep[]>([])
@@ -55,16 +65,24 @@ function scrollToBottom() {
   })
 }
 
-// Load messages for a specific session
+// Load messages for a specific session (latest PAGE_SIZE, with pagination support)
 async function loadSessionMessages(sessionKey: string) {
+  currentOffset.value = 0
+  hasMoreMessages.value = false
   try {
-    const { data } = await api.get(`/sessions/${encodeURIComponent(sessionKey)}/messages`)
-    chatMessages.value = (data || []).map((m: any) => ({
+    const { data } = await api.get(
+      `/sessions/${encodeURIComponent(sessionKey)}/messages`,
+      { params: { limit: PAGE_SIZE, offset: 0 } },
+    )
+    const msgs = (data || []).map((m: any) => ({
       id: m.id,
       role: m.role,
       content: m.content || '',
       created_at: m.created_at,
     }))
+    chatMessages.value = msgs
+    hasMoreMessages.value = msgs.length >= PAGE_SIZE
+    currentOffset.value = msgs.length
     scrollToBottom()
   } catch {
     // Try web-specific endpoint as fallback
@@ -81,6 +99,48 @@ async function loadSessionMessages(sessionKey: string) {
     } catch {
       // Session may not exist in DB yet (new session)
     }
+  }
+}
+
+// Load older messages when scrolling to top
+async function loadOlderMessages() {
+  if (loadingMore.value || !hasMoreMessages.value || !currentSessionKey.value) return
+  loadingMore.value = true
+  try {
+    const { data } = await api.get(
+      `/sessions/${encodeURIComponent(currentSessionKey.value)}/messages`,
+      { params: { limit: PAGE_SIZE, offset: currentOffset.value } },
+    )
+    const older = (data || []).map((m: any) => ({
+      id: m.id,
+      role: m.role,
+      content: m.content || '',
+      created_at: m.created_at,
+    }))
+    if (older.length > 0) {
+      // Preserve scroll position: remember distance from top before prepending
+      const el = messagesEl.value
+      const prevHeight = el ? el.scrollHeight : 0
+      chatMessages.value = [...older, ...chatMessages.value]
+      currentOffset.value += older.length
+      // Restore scroll position so content doesn't jump
+      nextTick(() => {
+        if (el) el.scrollTop = el.scrollHeight - prevHeight
+      })
+    }
+    hasMoreMessages.value = older.length >= PAGE_SIZE
+  } catch {
+    // ignore
+  } finally {
+    loadingMore.value = false
+  }
+}
+
+function onMessagesScroll() {
+  const el = messagesEl.value
+  if (!el) return
+  if (el.scrollTop < 100 && hasMoreMessages.value && !loadingMore.value) {
+    loadOlderMessages()
   }
 }
 
@@ -101,10 +161,13 @@ onUnmounted(() => {
   sessionWS.disconnect()
 })
 
-// Watch session WS events for real-time message updates
+// Watch session WS events for real-time message updates from external channels
+// (Telegram, Feishu, etc.). Web-originated messages are NOT broadcast by the
+// backend, so there is no risk of duplicates here.
 watch(() => sessionWS.events.value.length, () => {
   const latest = sessionWS.events.value[sessionWS.events.value.length - 1]
-  if (latest && latest.session_key === currentSessionKey.value) {
+  if (!latest) return
+  if (latest.session_key === currentSessionKey.value) {
     chatMessages.value.push({
       role: latest.message.role as 'user' | 'assistant',
       content: latest.message.content,
@@ -112,6 +175,8 @@ watch(() => sessionWS.events.value.length, () => {
     })
     scrollToBottom()
   }
+  // Refresh ChannelTree to update message counts / new sessions (debounced)
+  debouncedReloadTree()
 })
 
 function createNewSession() {
@@ -293,7 +358,8 @@ function handleKeydown(e: KeyboardEvent) {
           </template>
         </div>
 
-        <div ref="messagesEl" class="chat-messages">
+        <div ref="messagesEl" class="chat-messages" @scroll="onMessagesScroll">
+          <div v-if="loadingMore" class="loading-more">Loading earlier messages...</div>
           <div v-if="chatMessages.length === 0 && !thinking" class="chat-empty">
             <span class="empty-icon">&#9651;</span>
             <p>Start a conversation with ComoBot</p>
@@ -402,6 +468,7 @@ function handleKeydown(e: KeyboardEvent) {
       <!-- Channel Tree sidebar -->
       <div class="session-sidebar">
         <ChannelTree
+          ref="channelTreeRef"
           :selected-key="currentSessionKey"
           @select="selectSession"
           @select-meta="handleSessionMeta"
@@ -557,6 +624,12 @@ function handleKeydown(e: KeyboardEvent) {
   overflow-y: auto;
   padding: var(--space-4) 0;
   min-height: 0;
+}
+.loading-more {
+  text-align: center;
+  padding: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
 }
 .chat-empty {
   display: flex;

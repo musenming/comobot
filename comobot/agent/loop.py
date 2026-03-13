@@ -121,11 +121,38 @@ class AgentLoop:
         )
         self._memory_flushed: set[str] = set()  # Session keys that have been flushed this cycle
         self.orchestrator = None  # Optional WorkflowEngine for orchestrated flows
+        self._db_session_manager = None  # Optional SQLiteSessionManager for DB sync
 
         # Initialize memory search engine
         self._memory_engine = self._init_memory_engine()
         self.context = ContextBuilder(workspace, memory_engine=self._memory_engine)
         self._register_default_tools()
+
+    def set_db_session_manager(self, db_sm) -> None:
+        """Set a SQLiteSessionManager for database sync of all session writes."""
+        self._db_session_manager = db_sm
+
+    async def _sync_session_to_db(
+        self,
+        session: Session,
+        new_messages: list[dict] | None = None,
+        *,
+        channel: str = "",
+    ) -> None:
+        """Incrementally sync new messages to SQLite database for API queries.
+
+        Skips web channel sessions since ws.py already persists those directly.
+        """
+        if self._db_session_manager is None:
+            return
+        if channel == "web":
+            return  # Web chat handler (ws.py) already writes to DB
+        try:
+            session_id = await self._db_session_manager.ensure_session(session.key)
+            if new_messages:
+                await self._db_session_manager.append_messages(session_id, new_messages)
+        except Exception:
+            logger.warning("DB session sync failed for {}", session.key, exc_info=True)
 
     def _init_memory_engine(self) -> MemorySearchEngine | None:
         """Initialize the memory search engine based on config."""
@@ -500,8 +527,12 @@ class AgentLoop:
                 chat_id=chat_id,
             )
             final_content, _, all_msgs = await self._run_agent_loop(messages)
+            prev_count = len(session.messages)
             self._save_turn(session, all_msgs, 1 + len(history))
+            new_msgs = session.messages[prev_count:]
             self.sessions.save(session)
+            await self._sync_session_to_db(session, new_msgs, channel=channel)
+            await self._broadcast_session_messages(key, new_msgs)
             return OutboundMessage(
                 channel=channel,
                 chat_id=chat_id,
@@ -543,6 +574,7 @@ class AgentLoop:
 
             session.clear()
             self.sessions.save(session)
+            await self._sync_session_to_db(session, channel=msg.channel)
             self.sessions.invalidate(session.key)
             return OutboundMessage(
                 channel=msg.channel, chat_id=msg.chat_id, content="New session started."
@@ -625,11 +657,16 @@ class AgentLoop:
         if final_content is None:
             final_content = "I've completed processing but have no response to give."
 
+        prev_count = len(session.messages)
         self._save_turn(session, all_msgs, 1 + len(history))
+        new_msgs = session.messages[prev_count:]
         self.sessions.save(session)
+        await self._sync_session_to_db(session, new_msgs, channel=msg.channel)
 
-        # Broadcast new messages to WebSocket session listeners
-        await self._broadcast_session_messages(session_key, all_msgs, 1 + len(history))
+        # Broadcast new messages to WebSocket session listeners.
+        # Skip for web channel — ws_chat already sends responses via /ws/chat.
+        if msg.channel != "web":
+            await self._broadcast_session_messages(key, new_msgs)
 
         if (mt := self.tools.get("message")) and isinstance(mt, MessageTool) and mt._sent_in_turn:
             return None
@@ -690,29 +727,31 @@ class AgentLoop:
             session.messages.append(entry)
         session.updated_at = datetime.now()
 
-    async def _broadcast_session_messages(
-        self, session_key: str, messages: list[dict], skip: int
-    ) -> None:
+    async def _broadcast_session_messages(self, session_key: str, messages: list[dict]) -> None:
         """Broadcast new messages to WebSocket session listeners."""
         try:
             from comobot.api.routes.ws import manager as ws_manager
 
-            for m in messages[skip:]:
+            for m in messages:
                 role = m.get("role")
                 content = m.get("content", "")
-                if role == "assistant" and not content and not m.get("tool_calls"):
+                if role not in ("user", "assistant"):
+                    continue  # Only broadcast user/assistant for web UI
+                if role == "assistant" and not content:
                     continue
                 if isinstance(content, list):
                     content = " ".join(
                         c.get("text", "") for c in content if c.get("type") == "text"
                     )
+                if not content:
+                    continue
                 await ws_manager.broadcast_session_event(
                     {
                         "event": "new_message",
                         "session_key": session_key,
                         "message": {
                             "role": role,
-                            "content": str(content)[:500] if content else "",
+                            "content": str(content)[:500],
                             "created_at": m.get("timestamp", ""),
                         },
                     }

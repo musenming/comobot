@@ -55,7 +55,7 @@ comobot/
 │   │   ├── discord.py             #   Discord Gateway WebSocket
 │   │   ├── slack.py               #   Slack Socket Mode
 │   │   ├── whatsapp.py            #   WhatsApp (Node.js Bridge)
-│   │   ├── feishu.py              #   飞书 WebSocket 长连接
+│   │   ├── feishu.py              #   Feishu WebSocket 长连接
 │   │   ├── dingtalk.py            #   钉钉 Stream 模式
 │   │   ├── email.py               #   Email (IMAP 轮询 + SMTP)
 │   │   ├── matrix.py              #   Matrix 协议 (可选 E2E 加密)
@@ -131,7 +131,8 @@ comobot/
 │   │   ├── weather/SKILL.md       #   天气查询 (wttr.in / Open-Meteo)
 │   │   ├── summarize/SKILL.md     #   URL/文件/YouTube 摘要
 │   │   ├── tmux/SKILL.md          #   远程 tmux 会话控制
-│   │   ├── clawhub/SKILL.md       #   ClawHub 技能仓库
+│   │   ├── clawhub/SKILL.md       #   ClawHub 技能仓库 (安装前强制安全审查)
+│   │   ├── skill-vetter/SKILL.md  #   技能安全审查 — 安装前红旗检测与风险分级
 │   │   └── skill-creator/SKILL.md #   技能创建向导
 │   │
 │   └── utils/                     # 工具函数
@@ -239,7 +240,7 @@ comobot/
 ```
 ┌───────────────────────────────────────────────────────────────────────┐
 │                          用户 / 外部平台                                │
-│  Telegram  Discord  Slack  飞书  钉钉  Email  WhatsApp  QQ  Matrix   │
+│  Telegram  Discord  Slack  Feishu  钉钉  Email  WhatsApp  QQ  Matrix   │
 └───┬────────┬───────┬──────┬─────┬──────┬───────┬──────┬──────┬───────┘
     └────────┴───────┴──────┴─────┴──────┴───────┴──────┴──────┘
                                    │

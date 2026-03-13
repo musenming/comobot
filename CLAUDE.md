@@ -21,7 +21,7 @@ Lightweight personal AI assistant framework with multi-channel support.
   - `providers/` - LLM providers (litellm, openai-codex, custom, key rotator, transcription)
   - `security/` - JWT auth, AES-GCM encryption
   - `session/` - Session management (SQLite backend)
-  - `skills/` - 8 built-in skills (memory, cron, github, tmux, weather, clawhub, summarize, skill-creator)
+  - `skills/` - 9 built-in skills (memory, cron, github, tmux, weather, clawhub, skill-vetter, summarize, skill-creator)
   - `templates/` - Prompt templates (AGENTS, SOUL, TOOLS, USER, IDENTITY, BOOTSTRAP, HEARTBEAT)
   - `utils/` - Shared helpers + migration tools
 - `web/` - Vue 3 + Naive UI frontend (42 files: 14 views, 19 components, stores, composables)

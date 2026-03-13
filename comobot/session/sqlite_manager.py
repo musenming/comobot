@@ -98,6 +98,48 @@ class SQLiteSessionManager:
 
         self._cache[session.key] = session
 
+    async def ensure_session(self, key: str) -> int:
+        """Ensure session row exists and return session_id."""
+        row = await self.db.fetchone("SELECT id FROM sessions WHERE session_key = ?", (key,))
+        if row:
+            await self.db.execute(
+                "UPDATE sessions SET updated_at = datetime('now') WHERE id = ?",
+                (row["id"],),
+            )
+            return row["id"]
+        cursor = await self.db.execute("INSERT INTO sessions (session_key) VALUES (?)", (key,))
+        return cursor.lastrowid
+
+    async def append_messages(self, session_id: int, messages: list[dict]) -> None:
+        """Append new messages to an existing session (incremental, no delete)."""
+        for msg in messages:
+            role = msg.get("role", "")
+            if role not in ("user", "assistant"):
+                continue  # Only persist user/assistant for web display
+            content = msg.get("content", "")
+            # Flatten multimodal content lists into plain text for DB storage
+            if isinstance(content, list):
+                parts = []
+                for c in content:
+                    if isinstance(c, dict) and c.get("type") == "text":
+                        parts.append(c.get("text", ""))
+                    elif isinstance(c, dict):
+                        parts.append(f"[{c.get('type', 'attachment')}]")
+                content = "\n".join(parts)
+            if content is None:
+                content = ""
+            if role == "assistant" and not content and not msg.get("tool_calls"):
+                continue  # Skip empty assistant placeholders
+            tool_calls = json.dumps(msg["tool_calls"]) if "tool_calls" in msg else None
+            try:
+                await self.db.execute(
+                    "INSERT INTO messages (session_id, role, content, tool_calls, tool_call_id) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (session_id, role, content, tool_calls, msg.get("tool_call_id")),
+                )
+            except Exception:
+                pass  # Skip individual message failures, persist the rest
+
     def invalidate(self, key: str) -> None:
         self._cache.pop(key, None)
 

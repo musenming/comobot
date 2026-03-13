@@ -118,9 +118,9 @@ async def sessions_by_channel(
 
     display_names = {
         "telegram": "Telegram Bot",
-        "feishu": "飞书",
+        "feishu": "Feishu",
         "slack": "Slack",
-        "dingtalk": "钉钉",
+        "dingtalk": "DingTalk",
         "discord": "Discord",
         "web": "Web Chat",
         "email": "Email",
@@ -144,17 +144,26 @@ async def sessions_by_channel(
 async def get_messages(
     session_key: str,
     offset: int = Query(0, ge=0),
-    limit: int = Query(100, le=500),
+    limit: int = Query(200, ge=0),
     db: Database = Depends(get_db),
     _user: str = Depends(get_current_user),
 ):
     session = await db.fetchone("SELECT id FROM sessions WHERE session_key = ?", (session_key,))
     if not session:
         return []
+    if limit > 0:
+        # Fetch the *latest* N messages (sub-query DESC), then return in chronological order.
+        return await db.fetchall(
+            "SELECT * FROM ("
+            "  SELECT id, role, content, tool_calls, tool_call_id, created_at "
+            "  FROM messages WHERE session_id = ? ORDER BY id DESC LIMIT ? OFFSET ?"
+            ") ORDER BY id",
+            (session["id"], limit, offset),
+        )
     return await db.fetchall(
         "SELECT id, role, content, tool_calls, tool_call_id, created_at "
-        "FROM messages WHERE session_id = ? ORDER BY id LIMIT ? OFFSET ?",
-        (session["id"], limit, offset),
+        "FROM messages WHERE session_id = ? ORDER BY id",
+        (session["id"],),
     )
 
 
