@@ -165,7 +165,15 @@ class MemorySearchEngine:
                 cur = self._db.execute(
                     "INSERT INTO chunks (file_path, start_line, end_line, content, embedding, file_mtime, updated_at) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (file_path, chunk.start_line, chunk.end_line, chunk.content, embedding_blob, mtime, now),
+                    (
+                        file_path,
+                        chunk.start_line,
+                        chunk.end_line,
+                        chunk.content,
+                        embedding_blob,
+                        mtime,
+                        now,
+                    ),
                 )
                 # Insert into FTS
                 try:
@@ -204,6 +212,13 @@ class MemorySearchEngine:
                 continue
             rel = f"memory/{p.name}"
             files.append((rel, p))
+
+        # Know-how files
+        knowhow_dir = self.workspace / "knowhow"
+        if knowhow_dir.exists():
+            for p in sorted(knowhow_dir.glob("*.md")):
+                if not p.name.startswith("."):
+                    files.append((f"knowhow/{p.name}", p))
 
         return files
 
@@ -272,15 +287,30 @@ class MemorySearchEngine:
 
     # ── Search ────────────────────────────────────────────────────
 
-    def search(self, query: str, max_results: int = 5) -> list[MemoryChunk]:
-        """Hybrid search: BM25 + optional vector similarity."""
+    def search(
+        self,
+        query: str,
+        max_results: int = 5,
+        file_filter: str | None = None,
+    ) -> list[MemoryChunk]:
+        """Hybrid search: BM25 + optional vector similarity.
+
+        Args:
+            query: Search query string.
+            max_results: Maximum results to return.
+            file_filter: Optional path prefix filter, e.g. "knowhow/" to search only Know-how files.
+        """
         n_candidates = max_results * self.candidate_multiplier
 
         # BM25 search via FTS5
-        bm25_results = self._bm25_search(query, n_candidates)
+        bm25_results = self._bm25_search(query, n_candidates, file_filter=file_filter)
 
         # Vector search
-        vector_results = self._vector_search(query, n_candidates) if self._embedding_fn else []
+        vector_results = (
+            self._vector_search(query, n_candidates, file_filter=file_filter)
+            if self._embedding_fn
+            else []
+        )
 
         # Merge results
         merged = self._merge_results(bm25_results, vector_results)
@@ -298,25 +328,42 @@ class MemorySearchEngine:
 
         return merged[:max_results]
 
-    def _bm25_search(self, query: str, limit: int) -> list[tuple[int, float]]:
+    def _bm25_search(
+        self, query: str, limit: int, *, file_filter: str | None = None
+    ) -> list[tuple[int, float]]:
         """BM25 search via FTS5. Returns [(chunk_id, bm25_rank)]."""
         try:
-            rows = self._db.execute(
-                "SELECT rowid, rank FROM chunks_fts WHERE chunks_fts MATCH ? ORDER BY rank LIMIT ?",
-                (self._fts_escape(query), limit),
-            ).fetchall()
+            if file_filter:
+                rows = self._db.execute(
+                    "SELECT f.rowid, f.rank FROM chunks_fts f "
+                    "JOIN chunks c ON c.id = f.rowid "
+                    "WHERE chunks_fts MATCH ? AND c.file_path LIKE ? "
+                    "ORDER BY f.rank LIMIT ?",
+                    (self._fts_escape(query), f"{file_filter}%", limit),
+                ).fetchall()
+            else:
+                rows = self._db.execute(
+                    "SELECT rowid, rank FROM chunks_fts "
+                    "WHERE chunks_fts MATCH ? ORDER BY rank LIMIT ?",
+                    (self._fts_escape(query), limit),
+                ).fetchall()
             return [(r[0], r[1]) for r in rows]
         except sqlite3.OperationalError:
             # FTS5 not available, fallback to LIKE search
-            return self._like_search(query, limit)
+            return self._like_search(query, limit, file_filter=file_filter)
 
-    def _like_search(self, query: str, limit: int) -> list[tuple[int, float]]:
+    def _like_search(
+        self, query: str, limit: int, *, file_filter: str | None = None
+    ) -> list[tuple[int, float]]:
         """Fallback text search using LIKE."""
         terms = query.lower().split()
         if not terms:
             return []
         conditions = " AND ".join(["LOWER(content) LIKE ?"] * len(terms))
-        params = [f"%{t}%" for t in terms]
+        params: list[Any] = [f"%{t}%" for t in terms]
+        if file_filter:
+            conditions += " AND file_path LIKE ?"
+            params.append(f"{file_filter}%")
         rows = self._db.execute(
             f"SELECT id, 0.0 FROM chunks WHERE {conditions} LIMIT ?",
             (*params, limit),
@@ -333,7 +380,9 @@ class MemorySearchEngine:
                 results.append((chunk_id, -match_count))  # Negative = better (like BM25 rank)
         return results
 
-    def _vector_search(self, query: str, limit: int) -> list[tuple[int, float]]:
+    def _vector_search(
+        self, query: str, limit: int, *, file_filter: str | None = None
+    ) -> list[tuple[int, float]]:
         """Vector similarity search. Returns [(chunk_id, cosine_similarity)]."""
         if not self._embedding_fn:
             return []
@@ -346,9 +395,15 @@ class MemorySearchEngine:
             return []
 
         # Load all embeddings (for small memory corpora this is fine)
-        rows = self._db.execute(
-            "SELECT id, embedding FROM chunks WHERE embedding IS NOT NULL"
-        ).fetchall()
+        if file_filter:
+            rows = self._db.execute(
+                "SELECT id, embedding FROM chunks WHERE embedding IS NOT NULL AND file_path LIKE ?",
+                (f"{file_filter}%",),
+            ).fetchall()
+        else:
+            rows = self._db.execute(
+                "SELECT id, embedding FROM chunks WHERE embedding IS NOT NULL"
+            ).fetchall()
 
         results = []
         for chunk_id, blob in rows:
@@ -442,9 +497,7 @@ class MemorySearchEngine:
             best_mmr = float("-inf")
 
             for i, candidate in enumerate(remaining):
-                max_sim = max(
-                    _jaccard_similarity(candidate.content, s.content) for s in selected
-                )
+                max_sim = max(_jaccard_similarity(candidate.content, s.content) for s in selected)
                 mmr_score = lam * candidate.score - (1 - lam) * max_sim
                 if mmr_score > best_mmr:
                     best_mmr = mmr_score

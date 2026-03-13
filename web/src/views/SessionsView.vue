@@ -1,17 +1,20 @@
 <script setup lang="ts">
-import { ref, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NInput, NButton } from 'naive-ui'
+import { NInput, NButton, NCheckbox } from 'naive-ui'
 import PageLayout from '../components/PageLayout.vue'
 import ChatBubble from '../components/ChatBubble.vue'
 import SkeletonCard from '../components/SkeletonCard.vue'
 import EmptyState from '../components/EmptyState.vue'
+import ChannelTree from '../components/ChannelTree.vue'
+import KnowhowSidebar from '../components/KnowhowSidebar.vue'
+import KnowhowPreview from '../components/KnowhowPreview.vue'
+import { useSessionWS } from '../composables/useSessionWS'
 import api from '../api/client'
 
 const route = useRoute()
 const router = useRouter()
 const loading = ref(true)
-const sessions = ref<any[]>([])
 const selectedKey = ref<string | null>(null)
 const messages = ref<any[]>([])
 const loadingMessages = ref(false)
@@ -25,19 +28,14 @@ const wsConnected = ref(false)
 let ws: WebSocket | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return ''
-  const d = new Date(dateStr)
-  const now = new Date()
-  const diff = now.getTime() - d.getTime()
-  if (diff < 86400000) {
-    return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-  }
-  if (diff < 604800000) {
-    return d.toLocaleDateString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' })
-  }
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-}
+// Know-how extraction state
+const selecting = ref(false)
+const selectedMsgIds = ref(new Set<number>())
+const showKnowhowPreview = ref(false)
+const extractMsgIds = ref<number[]>([])
+
+// Session WS for real-time updates
+const sessionWS = useSessionWS()
 
 function scrollToBottom() {
   nextTick(() => {
@@ -47,21 +45,12 @@ function scrollToBottom() {
   })
 }
 
-async function loadSessions() {
-  try {
-    const { data } = await api.get('/sessions')
-    sessions.value = data
-  } catch {
-    // empty
-  } finally {
-    loading.value = false
-  }
-}
-
 async function selectSession(key: string) {
   selectedKey.value = key
   router.replace(`/sessions/${encodeURIComponent(key)}`)
   loadingMessages.value = true
+  selecting.value = false
+  selectedMsgIds.value.clear()
   try {
     const { data } = await api.get(`/sessions/${encodeURIComponent(key)}/messages`)
     messages.value = data
@@ -73,15 +62,26 @@ async function selectSession(key: string) {
   }
 }
 
+// Watch session WS events for real-time message updates
+watch(() => sessionWS.events.value.length, () => {
+  const latest = sessionWS.events.value[sessionWS.events.value.length - 1]
+  if (latest && latest.session_key === selectedKey.value) {
+    messages.value.push({
+      role: latest.message.role,
+      content: latest.message.content,
+      created_at: latest.message.created_at,
+    })
+    scrollToBottom()
+  }
+})
+
 // WebSocket connection for chat
 function connectWs() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const url = `${protocol}//${window.location.host}/ws/chat`
   ws = new WebSocket(url)
 
-  ws.onopen = () => {
-    wsConnected.value = true
-  }
+  ws.onopen = () => { wsConnected.value = true }
 
   ws.onmessage = (event) => {
     try {
@@ -100,8 +100,6 @@ function connectWs() {
           created_at: new Date().toISOString(),
         })
         scrollToBottom()
-        // Refresh sessions list to update message counts
-        loadSessions()
       } else if (parsed.type === 'error') {
         thinking.value = false
         sending.value = false
@@ -112,9 +110,7 @@ function connectWs() {
         })
         scrollToBottom()
       }
-    } catch {
-      // ignore non-JSON
-    }
+    } catch { /* ignore */ }
   }
 
   ws.onclose = () => {
@@ -122,20 +118,12 @@ function connectWs() {
     reconnectTimer = setTimeout(connectWs, 3000)
   }
 
-  ws.onerror = () => {
-    wsConnected.value = false
-  }
+  ws.onerror = () => { wsConnected.value = false }
 }
 
 function disconnectWs() {
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer)
-    reconnectTimer = null
-  }
-  if (ws) {
-    ws.close()
-    ws = null
-  }
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
+  if (ws) { ws.close(); ws = null }
 }
 
 function sendMessage() {
@@ -165,61 +153,84 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
+// Know-how extraction
+function toggleMsgSelect(id: number) {
+  if (selectedMsgIds.value.has(id)) selectedMsgIds.value.delete(id)
+  else selectedMsgIds.value.add(id)
+}
+
+function startExtract() {
+  extractMsgIds.value = [...selectedMsgIds.value]
+  showKnowhowPreview.value = true
+}
+
+function onKnowhowSaved() {
+  selecting.value = false
+  selectedMsgIds.value.clear()
+}
+
+function navigateKnowhow(id: string) {
+  router.push(`/knowhow/${id}`)
+}
+
 onMounted(async () => {
   connectWs()
-  await loadSessions()
+  sessionWS.connect()
+  loading.value = false
   const key = route.params.key as string
-  if (key && sessions.value.length > 0) {
+  if (key) {
     await selectSession(decodeURIComponent(key))
-  } else if (sessions.value.length > 0) {
-    await selectSession(sessions.value[0].session_key)
   }
 })
 
 onUnmounted(() => {
   disconnectWs()
+  sessionWS.disconnect()
 })
 </script>
 
 <template>
   <PageLayout title="Sessions" description="View and continue conversation history">
-    <div v-if="loading" class="sessions-layout">
-      <div class="session-list">
-        <SkeletonCard v-for="i in 5" :key="i" :lines="1" />
-      </div>
-      <div class="session-detail">
-        <SkeletonCard :lines="3" />
-      </div>
-    </div>
-
-    <template v-else-if="sessions.length === 0">
-      <EmptyState icon="&#9678;" title="No sessions yet" description="Sessions will appear here once users start chatting." />
-    </template>
-
-    <div v-else class="sessions-layout">
-      <!-- Session List -->
-      <div class="session-list">
-        <div
-          v-for="s in sessions"
-          :key="s.session_key"
-          class="session-item"
-          :class="{ active: selectedKey === s.session_key }"
-          @click="selectSession(s.session_key)"
-        >
-          <div class="session-header">
-            <div class="session-title">{{ s.preview || s.session_key }}</div>
-            <div class="session-date">{{ formatDate(s.updated_at) }}</div>
-          </div>
-          <div class="session-meta">
-            <span v-if="s.channel" class="session-channel">{{ s.channel }}</span>
-            <span>{{ s.message_count || 0 }} msgs</span>
-          </div>
-          <div class="session-key">{{ s.session_key }}</div>
+    <div class="sessions-layout">
+      <!-- Sidebar: Channel Tree + Know-how -->
+      <div class="sidebar">
+        <div class="sidebar-top">
+          <ChannelTree :selected-key="selectedKey" @select="selectSession" />
+        </div>
+        <div class="sidebar-bottom">
+          <KnowhowSidebar @select="navigateKnowhow" />
         </div>
       </div>
 
       <!-- Message Detail -->
       <div class="session-detail-wrapper">
+        <!-- Toolbar -->
+        <div v-if="selectedKey" class="toolbar">
+          <span class="toolbar-title">{{ selectedKey }}</span>
+          <n-button
+            v-if="!selecting"
+            size="small"
+            quaternary
+            @click="selecting = true"
+          >
+            Extract Know-how
+          </n-button>
+          <template v-if="selecting">
+            <span class="select-count">{{ selectedMsgIds.size }} selected</span>
+            <n-button
+              v-if="selectedMsgIds.size >= 2"
+              size="small"
+              type="primary"
+              @click="startExtract"
+            >
+              Save as Know-how
+            </n-button>
+            <n-button size="small" @click="selecting = false; selectedMsgIds.clear()">
+              Cancel
+            </n-button>
+          </template>
+        </div>
+
         <div class="session-detail" ref="messagesEl">
           <template v-if="selectedKey">
             <div v-if="loadingMessages" class="detail-loading">
@@ -229,25 +240,38 @@ onUnmounted(() => {
               <EmptyState title="No messages" description="This session has no messages." />
             </template>
             <div v-else class="message-flow">
-              <ChatBubble
+              <div
                 v-for="(msg, i) in messages"
                 :key="msg.id || i"
-                :role="msg.role"
-                :content="msg.content || ''"
-                :tool-calls="msg.tool_calls"
-                :created-at="msg.created_at"
-              />
+                class="message-row"
+                :class="{ selectable: selecting }"
+                @click="selecting && msg.id ? toggleMsgSelect(msg.id) : null"
+              >
+                <n-checkbox
+                  v-if="selecting && msg.id"
+                  :checked="selectedMsgIds.has(msg.id)"
+                  class="msg-checkbox"
+                  @update:checked="toggleMsgSelect(msg.id)"
+                />
+                <ChatBubble
+                  :role="msg.role"
+                  :content="msg.content || ''"
+                  :tool-calls="msg.tool_calls"
+                  :created-at="msg.created_at"
+                  style="flex: 1; min-width: 0"
+                />
+              </div>
               <div v-if="thinking" class="thinking-indicator">
                 <span class="dot" /><span class="dot" /><span class="dot" />
               </div>
             </div>
           </template>
           <template v-else>
-            <EmptyState title="Select a session" description="Choose a session from the list to view messages." />
+            <EmptyState title="Select a session" description="Choose a session from the sidebar." />
           </template>
         </div>
 
-        <!-- Chat Input - always visible when a session is selected -->
+        <!-- Chat Input -->
         <div v-if="selectedKey" class="chat-input-area">
           <div class="connection-status" :class="{ online: wsConnected }">
             {{ wsConnected ? 'Connected' : 'Disconnected' }}
@@ -273,77 +297,66 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- Know-how Preview Modal -->
+    <KnowhowPreview
+      :session-key="selectedKey || ''"
+      :message-ids="extractMsgIds"
+      :show="showKnowhowPreview"
+      @update:show="showKnowhowPreview = $event"
+      @saved="onKnowhowSaved"
+    />
   </PageLayout>
 </template>
 
 <style scoped>
 .sessions-layout {
   display: grid;
-  grid-template-columns: 300px 1fr;
+  grid-template-columns: 280px 1fr;
   gap: var(--space-4);
   min-height: 60vh;
 }
-.session-list {
+.sidebar {
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
-  overflow-y: auto;
-  max-height: 75vh;
-}
-.session-item {
-  padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--border);
-  cursor: pointer;
-  transition: background 150ms;
-}
-.session-item:hover {
-  background: var(--bg-muted);
-}
-.session-item.active {
-  background: var(--bg-muted);
-  border-left: 2px solid var(--text-primary);
-}
-.session-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: var(--space-2);
-}
-.session-title {
-  font-size: var(--text-sm);
-  font-weight: 500;
-  color: var(--text-primary);
+  max-height: 80vh;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  min-width: 0;
 }
-.session-date {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  white-space: nowrap;
+.sidebar-top {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+.sidebar-bottom {
+  max-height: 40%;
+  border-top: 2px solid var(--border);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
-.session-meta {
-  display: flex;
-  gap: var(--space-2);
-  font-size: var(--text-xs);
+.toolbar-title {
+  flex: 1;
+  font-size: var(--text-sm);
+  font-family: monospace;
   color: var(--text-muted);
-  margin-top: 2px;
-}
-.session-channel {
-  text-transform: capitalize;
-}
-.session-key {
-  font-size: 11px;
-  color: var(--text-muted);
-  opacity: 0.6;
-  margin-top: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: monospace;
+}
+.select-count {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 .session-detail-wrapper {
   display: flex;
@@ -351,7 +364,7 @@ onUnmounted(() => {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
-  max-height: 75vh;
+  max-height: 80vh;
 }
 .session-detail {
   flex: 1;
@@ -361,6 +374,23 @@ onUnmounted(() => {
 .message-flow {
   display: flex;
   flex-direction: column;
+}
+.message-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+.message-row.selectable {
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  padding: 2px;
+}
+.message-row.selectable:hover {
+  background: var(--bg-muted);
+}
+.msg-checkbox {
+  margin-top: 8px;
+  flex-shrink: 0;
 }
 .chat-input-area {
   flex-shrink: 0;
@@ -406,7 +436,7 @@ onUnmounted(() => {
   .sessions-layout {
     grid-template-columns: 1fr;
   }
-  .session-list {
+  .sidebar {
     max-height: 40vh;
   }
 }

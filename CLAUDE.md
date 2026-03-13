@@ -4,28 +4,29 @@ Lightweight personal AI assistant framework with multi-channel support.
 
 ## Project Structure
 
-- `comobot/` - Core Python package (87 Python files)
-  - `agent/` - Agent loop, context, memory, skills, subagent
-    - `tools/` - Built-in tools (shell, filesystem, web, spawn, mcp, cron, message)
-  - `api/` - FastAPI REST API and gateway
-    - `routes/` - API route handlers
-  - `bus/` - Event bus and queue
-  - `channels/` - Chat integrations: Telegram, Slack, DingTalk, Feishu, Discord, QQ, Email, Matrix, WhatsApp, Mochat
+> 详细结构见 [`structure.md`](structure.md)
+
+- `comobot/` - Core Python package (93 files, ~17K lines)
+  - `agent/` - Agent loop, context, memory, memory_search, skills, subagent, tools/
+  - `api/` - FastAPI REST API + WebSocket (`app.py`, `deps.py`, `routes/`)
+  - `bus/` - Event bus and async queue
+  - `channels/` - 11 chat integrations (Telegram, Slack, DingTalk, Feishu, Discord, QQ, Email, Matrix, WhatsApp, Mochat)
   - `cli/` - CLI entry point (`comobot` command via Typer)
   - `config/` - Config schema (Pydantic) and loader
-  - `cron/` - Scheduled tasks (with SQLite store)
-  - `db/` - Database layer (SQLite + WAL mode)
+  - `cron/` - Scheduled tasks (SQLite store)
+  - `db/` - Database layer (SQLite + WAL, versioned migrations)
   - `heartbeat/` - Proactive wake-up service
-  - `orchestrator/` - Optional orchestration layer on AgentLoop
-  - `providers/` - LLM providers (litellm, openai-codex, custom, key rotator)
-  - `security/` - Authentication, encryption, access control
-  - `session/` - Session management (with SQLite backend)
-  - `skills/` - Built-in skills (memory, cron, github, tmux, weather, clawhub, summarize, skill-creator)
-  - `templates/` - Prompt templates (AGENTS.md, SOUL.md, TOOLS.md, USER.md, HEARTBEAT.md)
-  - `utils/` - Shared helpers
+  - `knowhow/` - Know-how experience learning system (store, extractor, LLM-based extraction)
+  - `orchestrator/` - Optional workflow orchestration on AgentLoop
+  - `providers/` - LLM providers (litellm, openai-codex, custom, key rotator, transcription)
+  - `security/` - JWT auth, AES-GCM encryption
+  - `session/` - Session management (SQLite backend)
+  - `skills/` - 8 built-in skills (memory, cron, github, tmux, weather, clawhub, summarize, skill-creator)
+  - `templates/` - Prompt templates (AGENTS, SOUL, TOOLS, USER, IDENTITY, BOOTSTRAP, HEARTBEAT)
+  - `utils/` - Shared helpers + migration tools
+- `web/` - Vue 3 + Naive UI frontend (42 files: 14 views, 19 components, stores, composables)
 - `bridge/` - TypeScript WhatsApp bridge (Node.js)
-- `web/` - Vue 3 + Naive UI frontend
-- `tests/` - Pytest test suite (138 tests)
+- `tests/` - Pytest test suite (21 files)
 
 ## Development Setup
 

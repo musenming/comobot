@@ -112,6 +112,28 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         CREATE INDEX IF NOT EXISTS idx_audit_module ON audit_log(module);
     """,
     ),
+    (
+        2,
+        "add_knowhow_table",
+        """
+        CREATE TABLE IF NOT EXISTS knowhow (
+            id              TEXT PRIMARY KEY,
+            title           TEXT NOT NULL,
+            tags            TEXT NOT NULL DEFAULT '[]',
+            goal            TEXT,
+            file_path       TEXT NOT NULL UNIQUE,
+            source_session  TEXT,
+            source_messages TEXT,
+            status          TEXT DEFAULT 'active',
+            usage_count     INTEGER DEFAULT 0,
+            created_at      TEXT DEFAULT (datetime('now')),
+            updated_at      TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_knowhow_status ON knowhow(status);
+        CREATE INDEX IF NOT EXISTS idx_knowhow_tags ON knowhow(tags);
+        """,
+    ),
 ]
 
 

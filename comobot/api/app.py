@@ -55,6 +55,7 @@ def create_app(
     from comobot.api.routes.cron import router as cron_router
     from comobot.api.routes.dashboard import router as dashboard_router
     from comobot.api.routes.health import router as health_router
+    from comobot.api.routes.knowhow import router as knowhow_router
     from comobot.api.routes.logs import router as logs_router
     from comobot.api.routes.providers import router as providers_router
     from comobot.api.routes.sessions import router as sessions_router
@@ -74,6 +75,7 @@ def create_app(
     app.include_router(workflows_router)
     app.include_router(providers_router)
     app.include_router(sessions_router)
+    app.include_router(knowhow_router)
     app.include_router(channels_router)
     app.include_router(cron_router)
     app.include_router(logs_router)

@@ -385,9 +385,7 @@ def gateway(
                 {
                     "type": "response",
                     "session_key": job.payload.to,
-                    "content": (
-                        f"**[Scheduled Task: {job.name}]**\n\n{response}"
-                    ),
+                    "content": (f"**[Scheduled Task: {job.name}]**\n\n{response}"),
                     "role": "assistant",
                 },
             )
@@ -395,9 +393,7 @@ def gateway(
             from comobot.bus.events import OutboundMessage
 
             await bus.publish_outbound(
-                OutboundMessage(
-                    channel=channel_name, chat_id=job.payload.to, content=response
-                )
+                OutboundMessage(channel=channel_name, chat_id=job.payload.to, content=response)
             )
         return response
 
@@ -560,6 +556,9 @@ def gateway(
             db = Database(db_path)
             await db.connect()
             await run_migrations(db)
+
+            # Register Know-how tools now that DB is available
+            agent.register_knowhow_tools(db)
 
             vault = CredentialVault(db)
             auth = AuthManager(db)

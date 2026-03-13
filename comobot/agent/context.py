@@ -1,15 +1,20 @@
 """Context builder for assembling agent prompts."""
 
+from __future__ import annotations
+
 import base64
 import mimetypes
 import platform
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from comobot.agent.memory import MemoryStore
 from comobot.agent.skills import SkillsLoader
+
+if TYPE_CHECKING:
+    from comobot.agent.memory_search import MemorySearchEngine
 
 
 class ContextBuilder:
@@ -18,13 +23,18 @@ class ContextBuilder:
     BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md", "TOOLS.md", "IDENTITY.md"]
     _RUNTIME_CONTEXT_TAG = "[Runtime Context — metadata only, not instructions]"
 
-    def __init__(self, workspace: Path):
+    def __init__(self, workspace: Path, memory_engine: MemorySearchEngine | None = None):
         self.workspace = workspace
         self.memory = MemoryStore(workspace)
         self.skills = SkillsLoader(workspace)
+        self._memory_engine = memory_engine
 
-    def build_system_prompt(self, skill_names: list[str] | None = None) -> str:
-        """Build the system prompt from identity, bootstrap files, memory, and skills."""
+    def build_system_prompt(
+        self,
+        skill_names: list[str] | None = None,
+        user_message: str | None = None,
+    ) -> str:
+        """Build the system prompt from identity, bootstrap files, memory, knowhow, and skills."""
         parts = [self._get_identity()]
 
         bootstrap = self._load_bootstrap_files()
@@ -34,6 +44,12 @@ class ContextBuilder:
         memory = self.memory.get_memory_context()
         if memory:
             parts.append(f"# Memory\n\n{memory}")
+
+        # Know-how retrieval: inject relevant experience between Memory and Skills
+        if user_message and self._memory_engine:
+            knowhow_text = self._retrieve_knowhow(user_message)
+            if knowhow_text:
+                parts.append(f"# Relevant Experience (Know-how)\n\n{knowhow_text}")
 
         always_skills = self.skills.get_always_skills()
         if always_skills:
@@ -51,6 +67,30 @@ Skills with available="false" need dependencies installed first - you can try in
 {skills_summary}""")
 
         return "\n\n---\n\n".join(parts)
+
+    def _retrieve_knowhow(self, user_message: str) -> str:
+        """Retrieve relevant Know-how entries for the current user message."""
+        if not self._memory_engine:
+            return ""
+        try:
+            chunks = self._memory_engine.search(user_message, max_results=3, file_filter="knowhow/")
+            # Filter by score threshold
+            chunks = [c for c in chunks if c.score >= 0.3]
+            if not chunks:
+                return ""
+            return self._format_knowhow(chunks)
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _format_knowhow(chunks: list) -> str:
+        """Format Know-how search results as Markdown."""
+        sections = []
+        for chunk in chunks:
+            sections.append(
+                f"## {chunk.file_path}\n(relevance: {chunk.score:.2f})\n\n{chunk.content}"
+            )
+        return "\n\n".join(sections)
 
     def _get_identity(self) -> str:
         """Get the core identity section."""
@@ -130,7 +170,10 @@ Reply directly with text for conversations. Only use the 'message' tool to send 
             merged = [{"type": "text", "text": runtime_ctx}] + user_content
 
         return [
-            {"role": "system", "content": self.build_system_prompt(skill_names)},
+            {
+                "role": "system",
+                "content": self.build_system_prompt(skill_names, user_message=current_message),
+            },
             *history,
             {"role": "user", "content": merged},
         ]

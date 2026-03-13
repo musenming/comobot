@@ -18,6 +18,7 @@ from comobot.agent.memory_search import MemorySearchEngine
 from comobot.agent.subagent import SubagentManager
 from comobot.agent.tools.cron import CronTool
 from comobot.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
+from comobot.agent.tools.knowhow_tools import KnowhowSaveTool, KnowhowSearchTool
 from comobot.agent.tools.memory_tools import MemoryGetTool, MemorySearchTool
 from comobot.agent.tools.message import MessageTool
 from comobot.agent.tools.registry import ToolRegistry
@@ -88,7 +89,6 @@ class AgentLoop:
         self.restrict_to_workspace = restrict_to_workspace
         self.memory_config = memory_config or MemoryConfig()
 
-        self.context = ContextBuilder(workspace)
         self.sessions = session_manager or SessionManager(workspace)
         self.tools = ToolRegistry()
         self.subagents = SubagentManager(
@@ -124,6 +124,7 @@ class AgentLoop:
 
         # Initialize memory search engine
         self._memory_engine = self._init_memory_engine()
+        self.context = ContextBuilder(workspace, memory_engine=self._memory_engine)
         self._register_default_tools()
 
     def _init_memory_engine(self) -> MemorySearchEngine | None:
@@ -213,6 +214,21 @@ class AgentLoop:
         if self._memory_engine:
             self.tools.register(MemorySearchTool(self._memory_engine))
         self.tools.register(MemoryGetTool(self.workspace))
+
+        # Know-how tools (search only — save requires DB, registered when DB available)
+        if self._memory_engine:
+            self.tools.register(KnowhowSearchTool(self._memory_engine, None))
+
+    def register_knowhow_tools(self, db) -> None:
+        """Register Know-how tools that require DB access. Called by gateway when DB is available."""
+        from comobot.knowhow.store import KnowhowStore
+
+        store = KnowhowStore(self.workspace, db)
+        # Update search tool with store (for usage tracking)
+        if search_tool := self.tools.get("knowhow_search"):
+            search_tool._store = store
+        # Register save tool
+        self.tools.register(KnowhowSaveTool(store))
 
     async def _connect_mcp(self) -> None:
         """Connect to configured MCP servers (one-time, lazy)."""
@@ -550,9 +566,7 @@ class AgentLoop:
         ):
             self._memory_flushed.add(session.key)
             try:
-                await MemoryStore(self.workspace).memory_flush(
-                    session, self.provider, self.model
-                )
+                await MemoryStore(self.workspace).memory_flush(session, self.provider, self.model)
                 self._reindex_memory()
             except Exception:
                 logger.debug("Memory flush failed, continuing")
@@ -614,6 +628,9 @@ class AgentLoop:
         self._save_turn(session, all_msgs, 1 + len(history))
         self.sessions.save(session)
 
+        # Broadcast new messages to WebSocket session listeners
+        await self._broadcast_session_messages(session_key, all_msgs, 1 + len(history))
+
         if (mt := self.tools.get("message")) and isinstance(mt, MessageTool) and mt._sent_in_turn:
             return None
 
@@ -672,6 +689,36 @@ class AgentLoop:
             entry.setdefault("timestamp", datetime.now().isoformat())
             session.messages.append(entry)
         session.updated_at = datetime.now()
+
+    async def _broadcast_session_messages(
+        self, session_key: str, messages: list[dict], skip: int
+    ) -> None:
+        """Broadcast new messages to WebSocket session listeners."""
+        try:
+            from comobot.api.routes.ws import manager as ws_manager
+
+            for m in messages[skip:]:
+                role = m.get("role")
+                content = m.get("content", "")
+                if role == "assistant" and not content and not m.get("tool_calls"):
+                    continue
+                if isinstance(content, list):
+                    content = " ".join(
+                        c.get("text", "") for c in content if c.get("type") == "text"
+                    )
+                await ws_manager.broadcast_session_event(
+                    {
+                        "event": "new_message",
+                        "session_key": session_key,
+                        "message": {
+                            "role": role,
+                            "content": str(content)[:500] if content else "",
+                            "created_at": m.get("timestamp", ""),
+                        },
+                    }
+                )
+        except Exception:
+            logger.debug("Session WS broadcast skipped (no API running)")
 
     async def _consolidate_memory(self, session, archive_all: bool = False) -> bool:
         """Delegate to MemoryStore.consolidate(). Returns True on success."""

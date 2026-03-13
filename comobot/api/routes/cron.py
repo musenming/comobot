@@ -90,9 +90,7 @@ def _job_to_dict(job) -> dict:
         "last_run_at": _format_last_run(job.state.last_run_at_ms),
         "last_status": job.state.last_status,
         "last_error": job.state.last_error,
-        "created_at": datetime.fromtimestamp(
-            job.created_at_ms / 1000, tz=timezone.utc
-        ).isoformat()
+        "created_at": datetime.fromtimestamp(job.created_at_ms / 1000, tz=timezone.utc).isoformat()
         if job.created_at_ms
         else None,
     }
@@ -107,10 +105,12 @@ async def list_cron_jobs(
     jobs = await cron.list_jobs(include_disabled=True)
     results = [_job_to_dict(job) for job in jobs]
     # Sort: enabled + pending jobs first ("online"), completed/disabled last ("offline")
-    results.sort(key=lambda j: (
-        0 if j["enabled"] and j.get("next_run_at") else 1,
-        j.get("next_run_at") or "",
-    ))
+    results.sort(
+        key=lambda j: (
+            0 if j["enabled"] and j.get("next_run_at") else 1,
+            j.get("next_run_at") or "",
+        )
+    )
     return results
 
 

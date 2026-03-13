@@ -45,7 +45,7 @@ https://raw.githubusercontent.com/musenming/comobot/main/scripts/install.bat
 ```
 
 脚本会自动完成：
-1. 用 `winget` 安装 Python 3.11 和 Node.js 18
+1. 用 `winget` 安装 Python 3.11 和 Node.js 20.19+ or 22.12+
 2. 下载最新 Release 并解压到 `%APPDATA%\comobot\`
 3. 创建虚拟环境并安装依赖
 4. 构建前端静态资源

@@ -199,7 +199,24 @@
       "Bash(.venv/bin/pytest tests/ -x -q --ignore=tests/test_matrix_channel.py --ignore=tests/test_context_prompt_cache.py --ignore=tests/test_memory_consolidation_types.py 2>&1 | tail -10)",
       "Bash(.venv/bin/pytest tests/ -q --ignore=tests/test_matrix_channel.py --ignore=tests/test_context_prompt_cache.py --ignore=tests/test_memory_consolidation_types.py --ignore=tests/test_cron_commands.py 2>&1 | tail -5)",
       "Bash(.venv/bin/pytest tests/test_cron_commands.py -v 2>&1 | tail -10)",
-      "Bash(cd /Users/musen/comobot/web && npm run build 2>&1)"
+      "Bash(cd /Users/musen/comobot/web && npm run build 2>&1)",
+      "Bash(wc -l /home/comobot/comobot/**/*.py 2>/dev/null | tail -1)",
+      "Bash(ls -la /home/comobot/web/src/components/ | grep -E \"\\\\.vue$\")",
+      "Bash(find /home/comobot/web/src -name \"*.css\" -o -name \"main.ts\" -o -name \"index.html\" | grep -E \"\\\\.\\(css|ts|html\\)$\")",
+      "Bash(find bridge/ -type f \\\\\\( -name \"*.ts\" -o -name \"*.json\" \\\\\\) 2>/dev/null | sort && echo \"---\" && find tests/ -type f -name \"*.py\" | sort && echo \"---\" && ls -1 *.md *.toml *.yml *.json Dockerfile LICENSE .pre-commit-config.yaml 2>/dev/null)",
+      "Bash(find /home/comobot/web/src -name \"router*\" -o -name \"*router*\" 2>/dev/null | head -20)",
+      "Bash(.venv/bin/pytest tests/test_knowhow.py tests/test_session_channel.py -v 2>&1)",
+      "Bash(.venv/bin/pytest tests/ -v 2>&1)",
+      "Bash(.venv/bin/pytest tests/ -v --ignore=tests/test_matrix_channel.py 2>&1 | tail -30)",
+      "Bash(.venv/bin/pytest tests/test_db.py::test_migrations_idempotent -v 2>&1 | tail -20)",
+      "Bash(.venv/bin/pytest tests/test_context_prompt_cache.py -v 2>&1 | tail -30)",
+      "Bash(git stash:*)",
+      "Bash(.venv/bin/pytest tests/ -v --ignore=tests/test_matrix_channel.py --ignore=tests/test_context_prompt_cache.py --ignore=tests/test_cron_commands.py --ignore=tests/test_memory_consolidation_types.py 2>&1 | tail -10)",
+      "Bash(.venv/bin/ruff format:*)",
+      "Bash(.venv/bin/pytest tests/ -v --ignore=tests/test_matrix_channel.py --ignore=tests/test_context_prompt_cache.py --ignore=tests/test_cron_commands.py --ignore=tests/test_memory_consolidation_types.py 2>&1 | tail -5)",
+      "Bash(cd /home/comobot && .venv/bin/pytest tests/test_knowhow.py tests/test_session_channel.py -v 2>&1 | tail -20)",
+      "Bash(.venv/bin/pytest tests/test_knowhow.py -v 2>&1 | tail -15)",
+      "Bash(.venv/bin/pytest tests/test_knowhow.py::TestKnowhowExtractor -v 2>&1)"
     ]
   }
 }

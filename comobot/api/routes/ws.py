@@ -17,6 +17,7 @@ class ConnectionManager:
         self.log_connections: list[WebSocket] = []
         self.status_connections: list[WebSocket] = []
         self.cron_connections: list[WebSocket] = []
+        self.session_connections: list[WebSocket] = []
         # Chat connections keyed by session_key
         self.chat_connections: dict[str, list[WebSocket]] = {}
 
@@ -87,6 +88,25 @@ class ConnectionManager:
                 disconnected.append(ws)
         for ws in disconnected:
             self.disconnect_cron(ws)
+
+    async def connect_sessions(self, ws: WebSocket):
+        await ws.accept()
+        self.session_connections.append(ws)
+
+    def disconnect_sessions(self, ws: WebSocket):
+        if ws in self.session_connections:
+            self.session_connections.remove(ws)
+
+    async def broadcast_session_event(self, event: dict):
+        """Broadcast session events (new_message) to all listeners."""
+        disconnected = []
+        for ws in self.session_connections:
+            try:
+                await ws.send_json(event)
+            except Exception:
+                disconnected.append(ws)
+        for ws in disconnected:
+            self.disconnect_sessions(ws)
 
     async def broadcast_chat(self, session_key: str, data: dict):
         """Send a message to all chat WebSocket clients for a given session."""
@@ -171,6 +191,24 @@ async def ws_cron(websocket: WebSocket):
         manager.disconnect_cron(websocket)
 
 
+@router.websocket("/ws/sessions")
+async def ws_sessions(websocket: WebSocket):
+    """Real-time session message updates via WebSocket."""
+    await manager.connect_sessions(websocket)
+    try:
+        while True:
+            try:
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=30)
+                if data == "ping":
+                    await websocket.send_json({"type": "pong"})
+            except asyncio.TimeoutError:
+                await websocket.send_json({"type": "ping"})
+    except WebSocketDisconnect:
+        manager.disconnect_sessions(websocket)
+    except Exception:
+        manager.disconnect_sessions(websocket)
+
+
 @router.websocket("/ws/chat")
 async def ws_chat(websocket: WebSocket):
     """WebSocket endpoint for real-time chat with the agent."""
@@ -235,9 +273,7 @@ async def ws_chat(websocket: WebSocket):
                             }
                         )
 
-                        async def on_progress(
-                            prog_content: str, *, tool_hint: bool = False
-                        ):
+                        async def on_progress(prog_content: str, *, tool_hint: bool = False):
                             await websocket.send_json(
                                 {
                                     "type": "tool_hint" if tool_hint else "progress",

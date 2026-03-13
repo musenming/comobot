@@ -55,14 +55,22 @@ const routes = [
   },
   {
     path: '/sessions',
-    name: 'sessions',
-    component: () => import('../views/SessionsView.vue'),
-    meta: { requiresAuth: true },
+    redirect: '/chat',
   },
   {
     path: '/sessions/:key',
-    name: 'session-detail',
-    component: () => import('../views/SessionsView.vue'),
+    redirect: '/chat',
+  },
+  {
+    path: '/knowhow',
+    name: 'knowhow',
+    component: () => import('../views/KnowhowView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/knowhow/:id',
+    name: 'knowhow-detail',
+    component: () => import('../views/KnowhowView.vue'),
     meta: { requiresAuth: true },
   },
   {
