@@ -134,6 +134,23 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         CREATE INDEX IF NOT EXISTS idx_knowhow_tags ON knowhow(tags);
         """,
     ),
+    (
+        3,
+        "add_sessions_platform",
+        """
+        ALTER TABLE sessions ADD COLUMN platform TEXT DEFAULT '';
+
+        UPDATE sessions
+        SET platform = CASE
+            WHEN instr(session_key, ':') > 0
+            THEN substr(session_key, 1, instr(session_key, ':') - 1)
+            ELSE session_key
+        END
+        WHERE platform = '' OR platform IS NULL;
+
+        CREATE INDEX IF NOT EXISTS idx_sessions_platform ON sessions(platform);
+        """,
+    ),
 ]
 
 

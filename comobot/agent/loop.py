@@ -148,7 +148,9 @@ class AgentLoop:
         if channel == "web":
             return  # Web chat handler (ws.py) already writes to DB
         try:
-            session_id = await self._db_session_manager.ensure_session(session.key)
+            session_id = await self._db_session_manager.ensure_session(
+                session.key, platform=channel
+            )
             if new_messages:
                 await self._db_session_manager.append_messages(session_id, new_messages)
         except Exception:

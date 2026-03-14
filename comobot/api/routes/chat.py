@@ -94,7 +94,9 @@ async def send_message(
     # Create session if not exists
     session = await db.fetchone("SELECT id FROM sessions WHERE session_key = ?", (session_key,))
     if not session:
-        await db.execute("INSERT INTO sessions (session_key) VALUES (?)", (session_key,))
+        await db.execute(
+            "INSERT INTO sessions (session_key, platform) VALUES (?, 'web')", (session_key,)
+        )
         session = await db.fetchone("SELECT id FROM sessions WHERE session_key = ?", (session_key,))
 
     # Store user message

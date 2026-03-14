@@ -16,14 +16,22 @@ class SQLiteSessionManager:
         self.db = db
         self._cache: dict[str, Session] = {}
 
-    async def get_or_create(self, key: str) -> Session:
+    @staticmethod
+    def _extract_platform(key: str) -> str:
+        """Extract platform from session_key (e.g. 'telegram:123' -> 'telegram')."""
+        return key.split(":", 1)[0] if ":" in key else key
+
+    async def get_or_create(self, key: str, *, platform: str = "") -> Session:
         if key in self._cache:
             return self._cache[key]
 
         session = await self._load(key)
         if session is None:
             session = Session(key=key)
-            await self.db.execute("INSERT INTO sessions (session_key) VALUES (?)", (key,))
+            plat = platform or self._extract_platform(key)
+            await self.db.execute(
+                "INSERT INTO sessions (session_key, platform) VALUES (?, ?)", (key, plat)
+            )
 
         self._cache[key] = session
         return session
@@ -67,9 +75,10 @@ class SQLiteSessionManager:
             "SELECT id FROM sessions WHERE session_key = ?", (session.key,)
         )
         if not row:
+            plat = self._extract_platform(session.key)
             cursor = await self.db.execute(
-                "INSERT INTO sessions (session_key, last_consolidated) VALUES (?, ?)",
-                (session.key, session.last_consolidated),
+                "INSERT INTO sessions (session_key, last_consolidated, platform) VALUES (?, ?, ?)",
+                (session.key, session.last_consolidated, plat),
             )
             session_id = cursor.lastrowid
         else:
@@ -98,7 +107,7 @@ class SQLiteSessionManager:
 
         self._cache[session.key] = session
 
-    async def ensure_session(self, key: str) -> int:
+    async def ensure_session(self, key: str, *, platform: str = "") -> int:
         """Ensure session row exists and return session_id."""
         row = await self.db.fetchone("SELECT id FROM sessions WHERE session_key = ?", (key,))
         if row:
@@ -107,7 +116,10 @@ class SQLiteSessionManager:
                 (row["id"],),
             )
             return row["id"]
-        cursor = await self.db.execute("INSERT INTO sessions (session_key) VALUES (?)", (key,))
+        plat = platform or self._extract_platform(key)
+        cursor = await self.db.execute(
+            "INSERT INTO sessions (session_key, platform) VALUES (?, ?)", (key, plat)
+        )
         return cursor.lastrowid
 
     async def append_messages(self, session_id: int, messages: list[dict]) -> None:
@@ -145,11 +157,13 @@ class SQLiteSessionManager:
 
     async def list_sessions(self) -> list[dict[str, Any]]:
         rows = await self.db.fetchall(
-            "SELECT session_key, created_at, updated_at FROM sessions ORDER BY updated_at DESC"
+            "SELECT session_key, platform, created_at, updated_at "
+            "FROM sessions ORDER BY updated_at DESC"
         )
         return [
             {
                 "key": r["session_key"],
+                "platform": r["platform"] or self._extract_platform(r["session_key"]),
                 "created_at": r["created_at"],
                 "updated_at": r["updated_at"],
             }

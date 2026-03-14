@@ -27,7 +27,7 @@ async def list_sessions(
     _user: str = Depends(get_current_user),
 ):
     rows = await db.fetchall(
-        "SELECT id, session_key, created_at, updated_at, last_consolidated "
+        "SELECT id, session_key, platform, created_at, updated_at, last_consolidated "
         "FROM sessions ORDER BY updated_at DESC LIMIT 100"
     )
     results = []
@@ -39,9 +39,9 @@ async def list_sessions(
         )
         item["message_count"] = msg_count["c"] if msg_count else 0
 
-        # Get channel from session_key pattern (e.g., "telegram:123")
+        # Use platform column (with fallback for old rows)
         key = row["session_key"] or ""
-        item["channel"] = key.split(":")[0] if ":" in key else ""
+        item["channel"] = row["platform"] or (key.split(":")[0] if ":" in key else "")
 
         # Preview: last message content
         last_msg = await db.fetchone(
