@@ -11,7 +11,7 @@ interface FieldDef {
   type: string
   required?: boolean
   options?: string[]
-  default?: string
+  default?: string | string[]
 }
 
 interface ProviderOption {
@@ -181,7 +181,7 @@ function onProviderChange() {
   // Reset provider config with defaults
   const cfg: Record<string, string> = {}
   for (const f of (currentProvider.value?.fields || [])) {
-    cfg[f.key] = f.default || ''
+    cfg[f.key] = (typeof f.default === 'string' ? f.default : '') || ''
   }
   form.value.provider_config = cfg
 }
@@ -336,7 +336,7 @@ async function finishSetup() {
               <NInput
                 v-else
                 :value="form.provider_config[field.key] || ''"
-                :placeholder="field.default || field.label"
+                :placeholder="(typeof field.default === 'string' ? field.default : '') || field.label"
                 size="large"
                 @update:value="(v: string) => form.provider_config[field.key] = v"
               />
