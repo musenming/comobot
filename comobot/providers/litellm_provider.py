@@ -14,8 +14,13 @@ import json_repair
 import litellm
 from litellm import acompletion
 
-from comobot.providers.base import LLMProvider, LLMResponse, ToolCallRequest
-from comobot.providers.registry import find_by_model, find_gateway
+# Suppress the "Give Feedback / Get Help" banner and debug info that LiteLLM
+# prints at module level.  Must happen right after import, before any usage.
+litellm.suppress_debug_info = True
+litellm.drop_params = True
+
+from comobot.providers.base import LLMProvider, LLMResponse, ToolCallRequest  # noqa: E402
+from comobot.providers.registry import find_by_model, find_gateway  # noqa: E402
 
 # Standard chat-completion message keys.
 _ALLOWED_MSG_KEYS = frozenset(
@@ -63,10 +68,7 @@ class LiteLLMProvider(LLMProvider):
         if api_base:
             litellm.api_base = api_base
 
-        # Disable LiteLLM logging noise
-        litellm.suppress_debug_info = True
-        # Drop unsupported parameters for providers (e.g., gpt-5 rejects some params)
-        litellm.drop_params = True
+        # NOTE: suppress_debug_info and drop_params are set at module level above.
 
     def _setup_env(self, api_key: str, api_base: str | None, model: str) -> None:
         """Set environment variables based on detected provider."""

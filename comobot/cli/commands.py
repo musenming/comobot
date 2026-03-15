@@ -1030,6 +1030,209 @@ def status():
 
 
 # ============================================================================
+# Uninstall
+# ============================================================================
+
+
+@app.command()
+def uninstall(
+    all_data: bool = typer.Option(
+        False, "--all", help="Remove all data including config, database, and workspace"
+    ),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompts"),
+):
+    """Uninstall comobot from this machine."""
+    import shutil
+    import subprocess
+
+    home = Path.home()
+    data_dir = home / ".comobot"
+    bin_dir = data_dir / "bin"
+    binary = bin_dir / "comobot"
+    symlink = Path("/usr/local/bin/comobot")
+    shell_rcs = [home / ".zshrc", home / ".bashrc", home / ".profile"]
+
+    # ── Summary ──────────────────────────────────────────────────────────
+    console.print(f"{__logo__} comobot Uninstaller\n")
+    console.print("[bold]The following will be removed:[/bold]")
+    if binary.exists():
+        console.print(f"  • Binary:  {binary}")
+    if symlink.is_symlink() or symlink.exists():
+        console.print(f"  • Symlink: {symlink}")
+    for rc in shell_rcs:
+        if rc.exists() and ".comobot/bin" in rc.read_text(errors="ignore"):
+            console.print(f"  • PATH entry in {rc}")
+    if all_data:
+        console.print(f"  • [red]All data:  {data_dir}[/red]  (config, database, workspace, logs)")
+    else:
+        console.print(f"  • Binary dir: {bin_dir}")
+        console.print("  [dim]Tip: use --all to also remove config, database, and workspace[/dim]")
+    console.print()
+
+    # ── Gateway stop ─────────────────────────────────────────────────────
+    console.print("[bold]Running gateway process will be stopped.[/bold]")
+    console.print()
+
+    # ── Confirm ──────────────────────────────────────────────────────────
+    if not yes:
+        confirm = typer.confirm("Proceed with uninstall?", default=False)
+        if not confirm:
+            console.print("[dim]Aborted.[/dim]")
+            raise typer.Exit(0)
+
+    # ── Stop gateway ─────────────────────────────────────────────────────
+    console.print("Stopping gateway process...")
+    # Kill any running comobot gateway processes (but not ourselves)
+    my_pid = str(os.getpid())
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", "comobot gateway"],
+            capture_output=True,
+            text=True,
+        )
+        for pid in result.stdout.strip().splitlines():
+            pid = pid.strip()
+            if pid and pid != my_pid:
+                subprocess.run(["kill", pid], capture_output=True)
+                console.print(f"  Stopped process {pid}")
+    except FileNotFoundError:
+        pass  # pgrep not available on this platform
+
+    # Also try killing by port (default 18790)
+    try:
+        result = subprocess.run(
+            ["lsof", "-ti", "tcp:18790"],
+            capture_output=True,
+            text=True,
+        )
+        for pid in result.stdout.strip().splitlines():
+            pid = pid.strip()
+            if pid and pid != my_pid:
+                subprocess.run(["kill", pid], capture_output=True)
+    except FileNotFoundError:
+        pass
+
+    # ── Remove symlink ───────────────────────────────────────────────────
+    if symlink.is_symlink() or symlink.exists():
+        try:
+            symlink.unlink()
+            console.print(f"  [green]✓[/green] Removed {symlink}")
+        except PermissionError:
+            try:
+                subprocess.run(["sudo", "rm", "-f", str(symlink)], check=True)
+                console.print(f"  [green]✓[/green] Removed {symlink} (sudo)")
+            except Exception:
+                console.print(
+                    f"  [yellow]⚠[/yellow] Could not remove {symlink}, please delete manually"
+                )
+
+    # ── Clean shell rc PATH entries ──────────────────────────────────────
+    for rc in shell_rcs:
+        if not rc.exists():
+            continue
+        original = rc.read_text(errors="ignore")
+        lines = original.splitlines(keepends=True)
+        cleaned: list[str] = []
+        skip_next_blank = False
+        for line in lines:
+            stripped = line.strip()
+            # Remove the comobot PATH line and its "# Comobot" comment
+            if ".comobot/bin" in stripped or stripped == "# Comobot":
+                skip_next_blank = True
+                continue
+            if skip_next_blank and stripped == "":
+                skip_next_blank = False
+                continue
+            skip_next_blank = False
+            cleaned.append(line)
+        new_text = "".join(cleaned)
+        if new_text != original:
+            rc.write_text(new_text)
+            console.print(f"  [green]✓[/green] Cleaned PATH from {rc}")
+
+    # ── Remove files ─────────────────────────────────────────────────────
+    if all_data:
+        if data_dir.exists():
+            shutil.rmtree(data_dir, ignore_errors=True)
+            console.print(f"  [green]✓[/green] Removed {data_dir}")
+    else:
+        # Only remove the bin directory
+        if binary.exists():
+            binary.unlink()
+            console.print(f"  [green]✓[/green] Removed {binary}")
+        if bin_dir.exists() and not any(bin_dir.iterdir()):
+            bin_dir.rmdir()
+
+    console.print()
+    console.print("[bold green]comobot has been uninstalled.[/bold green]")
+    if not all_data and data_dir.exists():
+        console.print(f"[dim]Your data is preserved in {data_dir}. Use --all to remove it.[/dim]")
+
+
+# ============================================================================
+# Download stats
+# ============================================================================
+
+
+@app.command()
+def stats():
+    """Show GitHub release download statistics."""
+    import json as _json
+    import urllib.request
+
+    repo = "musenming/comobot"
+    url = f"https://api.github.com/repos/{repo}/releases"
+
+    console.print(f"{__logo__} comobot Download Statistics\n")
+
+    try:
+        req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            releases = _json.loads(resp.read())
+    except Exception as exc:
+        console.print(f"[red]Failed to fetch release data: {exc}[/red]")
+        raise typer.Exit(1)
+
+    if not releases:
+        console.print("[dim]No releases found.[/dim]")
+        return
+
+    total_downloads = 0
+
+    for rel in releases:
+        tag = rel["tag_name"]
+        published = (rel.get("published_at") or "")[:10]
+        assets = rel.get("assets", [])
+        rel_total = sum(a["download_count"] for a in assets)
+        total_downloads += rel_total
+
+        table = Table(
+            title=f"{tag}  ({published})  Total: {rel_total}",
+            title_style="bold cyan",
+            show_header=True,
+            header_style="bold",
+            padding=(0, 1),
+        )
+        table.add_column("Asset", style="white", no_wrap=True)
+        table.add_column("Downloads", justify="right", style="green")
+
+        for asset in assets:
+            name = asset["name"]
+            count = asset["download_count"]
+            table.add_row(name, str(count))
+
+        if not assets:
+            table.add_row("[dim]no assets[/dim]", "-")
+
+        console.print(table)
+        console.print()
+
+    console.print(
+        f"[bold]Total downloads across all releases: [green]{total_downloads}[/green][/bold]"
+    )
+
+
+# ============================================================================
 # OAuth Login
 # ============================================================================
 
