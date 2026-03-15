@@ -151,6 +151,13 @@ _PROVIDERS: list[dict[str, Any]] = [
         "fields": [_KEY_FIELD],
     },
     {
+        "id": "minimax",
+        "name": "MiniMax",
+        "recommended": False,
+        "needs_key": True,
+        "fields": [_KEY_FIELD],
+    },
+    {
         "id": "custom",
         "name": "自定义 OpenAI 兼容接口",
         "recommended": False,
@@ -194,6 +201,7 @@ _PROVIDER_MODEL_MAP: dict[str, str] = {
     "volcengine": "openai/doubao-lite-4k",
     "groq": "groq/llama-3.1-8b-instant",
     "aihubmix": "openai/gpt-4o-mini",
+    "minimax": "minimax/MiniMax-Text-01",
     "custom": "openai/gpt-4o-mini",
 }
 

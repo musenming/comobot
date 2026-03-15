@@ -161,7 +161,22 @@ verify() {
             comobot onboard || warn "Onboard failed. You can run 'comobot onboard' manually later."
         fi
         echo ""
-        echo "  Run 'comobot --help' to get started."
+        info "Run ${GREEN}comobot gateway${NC} to start the Web UI client"
+        info "First-time users can configure Provider and Channel on the Setup page"
+        echo ""
+        # Ask user whether to start comobot gateway now
+        printf "${BLUE}[comobot]${NC} Would you like to start comobot gateway now? (yes/no): "
+        local answer
+        read -r answer < /dev/tty 2>/dev/null || read -r answer
+        case "$answer" in
+            [Yy]|[Yy][Ee][Ss])
+                info "Starting comobot gateway..."
+                exec comobot gateway
+                ;;
+            *)
+                success "Installation complete! You can run 'comobot gateway' anytime to start the service."
+                ;;
+        esac
     else
         warn "Installation completed but 'comobot' not found in PATH."
         echo "  Please restart your terminal or run: source $SHELL_RC"

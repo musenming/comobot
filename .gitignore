@@ -22,6 +22,7 @@ htmlcov/
 # Type checking
 .mypy_cache/
 .ruff_cache/
+docs/
 
 # Environment
 .env

@@ -49,7 +49,7 @@ CHANNEL_CONFIG_FIELDS: dict[str, list[dict]] = {
     "feishu": [
         {"key": "app_id", "label": "App ID", "type": "text", "required": True},
         {"key": "app_secret", "label": "App Secret", "type": "secret", "required": True},
-        {"key": "allow_from", "label": "Allowed Users", "type": "tags"},
+        {"key": "allow_from", "label": "Allowed Users", "type": "tags", "default": ["*"]},
         {
             "key": "ssl_verify",
             "label": "SSL Verify",

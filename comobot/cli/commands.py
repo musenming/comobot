@@ -591,7 +591,12 @@ def gateway(
             )
             server = uvicorn.Server(uvi_config)
 
-            console.print(f"[green]✓[/green] Web panel: http://0.0.0.0:{port}")
+            url = f"http://localhost:{port}"
+            console.print(f"[green]✓[/green] Web panel: {url}")
+
+            import webbrowser
+
+            webbrowser.open(url)
 
             # Register signal handlers for graceful shutdown
             # add_signal_handler is not supported on Windows

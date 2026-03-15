@@ -67,6 +67,7 @@ onMounted(async () => {
       { label: 'Anthropic (Claude)', value: 'anthropic', recommended: false, needsKey: true, fields: [{ key: 'api_key', label: 'API Key', type: 'secret', required: true }] },
       { label: 'DeepSeek', value: 'deepseek', recommended: false, needsKey: true, fields: [{ key: 'api_key', label: 'API Key', type: 'secret', required: true }] },
       { label: 'Google Gemini', value: 'gemini', recommended: false, needsKey: true, fields: [{ key: 'api_key', label: 'API Key', type: 'secret', required: true }] },
+      { label: 'MiniMax', value: 'minimax', recommended: false, needsKey: true, fields: [{ key: 'api_key', label: 'API Key', type: 'secret', required: true }] },
       { label: '本地模型（Ollama）', value: 'ollama', recommended: false, needsKey: false, fields: [{ key: 'api_base', label: 'API Base URL', type: 'text', default: 'http://localhost:11434/v1' }] },
     ]
   }
@@ -80,7 +81,7 @@ onMounted(async () => {
       { id: 'telegram', name: 'Telegram', fields: [{ key: 'bot_token', label: 'Bot Token', type: 'secret', required: true }] },
       { id: 'discord', name: 'Discord', fields: [{ key: 'bot_token', label: 'Bot Token', type: 'secret', required: true }] },
       { id: 'slack', name: 'Slack', fields: [{ key: 'bot_token', label: 'Bot Token', type: 'secret', required: true }] },
-      { id: 'feishu', name: 'Feishu', fields: [{ key: 'app_id', label: 'App ID', type: 'text', required: true }, { key: 'app_secret', label: 'App Secret', type: 'secret', required: true }] },
+      { id: 'feishu', name: 'Feishu', fields: [{ key: 'app_id', label: 'App ID', type: 'text', required: true }, { key: 'app_secret', label: 'App Secret', type: 'secret', required: true }, { key: 'allow_from', label: 'Allowed Users', type: 'tags', default: ['*'] }] },
       { id: 'dingtalk', name: 'Dingtalk', fields: [{ key: 'app_key', label: 'App Key', type: 'text', required: true }, { key: 'app_secret', label: 'App Secret', type: 'secret', required: true }] },
     ]
   }
@@ -155,6 +156,18 @@ function nextStep() {
       return
     }
   }
+  if (currentStep.value === 3 && form.value.channel_type) {
+    // Validate tags fields that have a default are not empty
+    for (const field of channelFields.value) {
+      if (field.type === 'tags') {
+        const val = form.value.channel_config[field.key]
+        if (!Array.isArray(val) || val.length === 0) {
+          message.warning(`${field.label} cannot be empty`)
+          return
+        }
+      }
+    }
+  }
   currentStep.value++
 }
 
@@ -178,7 +191,7 @@ function onChannelChange() {
   const cfg: Record<string, string | string[]> = {}
   for (const f of (currentChannel.value?.fields || [])) {
     if (f.type === 'tags') {
-      cfg[f.key] = []
+      cfg[f.key] = f.default || []
     } else {
       cfg[f.key] = f.default || ''
     }
