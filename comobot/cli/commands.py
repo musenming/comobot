@@ -594,10 +594,6 @@ def gateway(
             url = f"http://localhost:{port}"
             console.print(f"[green]✓[/green] Web panel: {url}")
 
-            import webbrowser
-
-            webbrowser.open(url)
-
             # Register signal handlers for graceful shutdown
             # add_signal_handler is not supported on Windows
             if sys.platform != "win32":
@@ -605,12 +601,21 @@ def gateway(
                 for sig in (signal.SIGTERM, signal.SIGINT):
                     loop.add_signal_handler(sig, _signal_handler)
 
+            async def _open_browser() -> None:
+                """Wait for server to be ready, then open browser."""
+                import webbrowser
+
+                while not server.started:
+                    await asyncio.sleep(0.1)
+                webbrowser.open(url)
+
             await cron.start()
             await heartbeat.start()
             await asyncio.gather(
                 agent.run(),
                 channels.start_all(),
                 server.serve(),
+                _open_browser(),
             )
         except KeyboardInterrupt:
             console.print("\nShutting down...")
