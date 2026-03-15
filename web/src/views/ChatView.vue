@@ -189,7 +189,7 @@ function createNewSession() {
   selecting.value = false
   selectedMsgIds.value.clear()
 
-  const newKey = `web:${crypto.randomUUID().slice(0, 12)}`
+  const newKey = `web:${Math.random().toString(36).slice(2, 14)}`
   currentSessionKey.value = newKey
   currentSessionTitle.value = newKey
   localStorage.setItem(SESSION_STORAGE_KEY, newKey)
