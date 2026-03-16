@@ -13,7 +13,7 @@ venv/
 env/
 .Python
 #Claude 
-*.claude/
+.claude/
 */CLAUDE.md
 # Testing
 .pytest_cache/
