@@ -12,8 +12,9 @@ build/
 venv/
 env/
 .Python
-#
-/CLAUDE.md
+#Claude 
+*.claude/
+*/CLAUDE.md
 # Testing
 .pytest_cache/
 .coverage
