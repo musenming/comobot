@@ -261,11 +261,37 @@ class MemoryFlushConfig(Base):
     soft_threshold_ratio: float = 0.8  # Flush when unconsolidated >= memory_window * ratio
 
 
+class SessionIndexConfig(Base):
+    """Session transcript indexing configuration."""
+
+    enabled: bool = False
+    delta_threshold_bytes: int = 102400  # 100KB
+    delta_threshold_lines: int = 50
+    debounce_seconds: int = 60
+    max_transcript_age_days: int = 90
+    exclude_channels: list[str] = Field(default_factory=list)
+
+
+class QMDConfig(Base):
+    """QMD sidecar search engine configuration."""
+
+    enabled: bool = False
+    command: str = "qmd"  # QMD binary path (or "npx @tobilu/qmd")
+    mode: str = "auto"  # "daemon" | "on-demand" | "auto"
+    paths: dict[str, str] = Field(default_factory=dict)  # Extra collections {name: path}
+    update_interval: int = 300  # Periodic update interval (seconds)
+    wait_for_boot_sync: bool = False  # Block on first index at startup
+    max_results: int = 10
+
+
 class MemoryConfig(Base):
     """Memory system configuration."""
 
+    backend: str = "auto"  # "auto" | "builtin" | "qmd"
     search: MemorySearchConfig = Field(default_factory=MemorySearchConfig)
     flush: MemoryFlushConfig = Field(default_factory=MemoryFlushConfig)
+    session_index: SessionIndexConfig = Field(default_factory=SessionIndexConfig)
+    qmd: QMDConfig = Field(default_factory=QMDConfig)
 
 
 class AgentDefaults(Base):

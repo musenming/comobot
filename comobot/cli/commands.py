@@ -493,6 +493,31 @@ def gateway(
 
     console.print(f"[green]✓[/green] Heartbeat: every {hb_cfg.interval_s}s")
 
+    # Memory backend status
+    _mem_cfg = config.agents.defaults.memory
+    if agent._memory_backend:
+        from comobot.agent.memory_backend import FallbackBackend
+
+        if isinstance(agent._memory_backend, FallbackBackend):
+            fb = agent._memory_backend
+            if fb.primary_active:
+                _qmd_mode = _mem_cfg.qmd.mode
+                console.print(f"[green]✓[/green] Memory search: QMD active (mode={_qmd_mode})")
+            else:
+                console.print(
+                    "[green]✓[/green] Memory search: builtin (BM25 hybrid)"
+                    " [dim]| QMD hot-swap ready[/dim]"
+                )
+        else:
+            console.print("[green]✓[/green] Memory search: builtin (BM25 hybrid)")
+    elif agent._memory_engine:
+        console.print("[green]✓[/green] Memory search: builtin (BM25 hybrid)")
+    else:
+        console.print("[yellow]Warning: Memory search disabled[/yellow]")
+
+    if _mem_cfg.session_index.enabled:
+        console.print("[green]✓[/green] Session indexing: enabled")
+
     async def run():
         db = None
         server = None

@@ -14,7 +14,9 @@ from loguru import logger
 
 from comobot.agent.context import ContextBuilder
 from comobot.agent.memory import MemoryStore
+from comobot.agent.memory_backend import BuiltinBackend, MemoryBackend
 from comobot.agent.memory_search import MemorySearchEngine
+from comobot.agent.session_indexer import SessionIndexer
 from comobot.agent.subagent import SubagentManager
 from comobot.agent.tools.cron import CronTool
 from comobot.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
@@ -123,8 +125,10 @@ class AgentLoop:
         self.orchestrator = None  # Optional WorkflowEngine for orchestrated flows
         self._db_session_manager = None  # Optional SQLiteSessionManager for DB sync
 
-        # Initialize memory search engine
+        # Initialize memory search engine and backend
         self._memory_engine = self._init_memory_engine()
+        self._memory_backend: MemoryBackend | None = self._init_memory_backend()
+        self._session_indexer = self._init_session_indexer()
         self.context = ContextBuilder(workspace, memory_engine=self._memory_engine)
         self._register_default_tools()
 
@@ -211,6 +215,59 @@ class AgentLoop:
 
         return None
 
+    def _init_memory_backend(self) -> MemoryBackend | None:
+        """Initialize the memory backend based on config.
+
+        Always wraps in FallbackBackend so QMD can be hot-swapped on/off
+        from the frontend without restarting the gateway.
+        """
+        if not self._memory_engine:
+            logger.info("Memory backend: disabled (search engine not available)")
+            return None
+
+        from comobot.agent.memory_backend import FallbackBackend
+        from comobot.agent.qmd_backend import QMDBackend
+
+        builtin = BuiltinBackend(self._memory_engine, self.workspace)
+        qmd_cfg = self.memory_config.qmd
+        qmd = QMDBackend(qmd_cfg, self.workspace)
+
+        # Always create FallbackBackend for hot-swap support
+        fb = FallbackBackend(qmd, builtin)
+
+        backend_type = self.memory_config.backend
+        qmd_wanted = backend_type == "qmd" or (backend_type == "auto" and qmd_cfg.enabled)
+
+        if qmd_wanted:
+            logger.info(
+                "Memory backend: initializing QMD (mode={}, command={})",
+                qmd_cfg.mode,
+                qmd_cfg.command,
+            )
+        else:
+            logger.info("Memory backend: builtin (BM25 + vector hybrid search), QMD hot-swap ready")
+
+        return fb
+
+    def _init_session_indexer(self) -> SessionIndexer | None:
+        """Initialize the session indexer if configured."""
+        cfg = self.memory_config.session_index
+        if not cfg.enabled:
+            return None
+        sessions_dir = self.workspace / "sessions"
+        if not sessions_dir.exists():
+            return None
+        try:
+            return SessionIndexer(
+                config=cfg,
+                memory_engine=self._memory_engine,
+                sessions_dir=sessions_dir,
+                workspace=self.workspace,
+            )
+        except Exception:
+            logger.exception("Failed to initialize session indexer")
+            return None
+
     def _reindex_memory(self) -> None:
         """Reindex memory files (call after memory writes)."""
         if self._memory_engine:
@@ -240,7 +297,9 @@ class AgentLoop:
             self.tools.register(CronTool(self.cron_service))
 
         # Memory tools
-        if self._memory_engine:
+        if self._memory_backend:
+            self.tools.register(MemorySearchTool(backend=self._memory_backend))
+        elif self._memory_engine:
             self.tools.register(MemorySearchTool(self._memory_engine))
         self.tools.register(MemoryGetTool(self.workspace))
 
@@ -664,6 +723,13 @@ class AgentLoop:
         new_msgs = session.messages[prev_count:]
         self.sessions.save(session)
         await self._sync_session_to_db(session, new_msgs, channel=msg.channel)
+
+        # Session transcript indexing (debounced, non-blocking)
+        if self._session_indexer:
+            try:
+                await self._session_indexer.check_and_index()
+            except Exception:
+                logger.debug("Session indexing failed")
 
         # Broadcast new messages to WebSocket session listeners.
         # Skip for web channel — ws_chat already sends responses via /ws/chat.

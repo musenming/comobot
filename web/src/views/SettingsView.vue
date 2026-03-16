@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { NButton, NInput, NForm, NFormItem, NTabs, NTabPane, NSelect, NSpace, NCard, useMessage } from 'naive-ui'
+import { NButton, NInput, NForm, NFormItem, NTabs, NTabPane, NSelect, NSpace, NCard, NSwitch, useMessage } from 'naive-ui'
 import { MdEditor, MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
 import PageLayout from '../components/PageLayout.vue'
@@ -29,6 +29,22 @@ const memoryContent = ref('')
 
 // Danger zone
 const showClearMemory = ref(false)
+
+// QMD
+const qmdEnabled = ref(false)
+const qmdLoading = ref(false)
+const qmdStatus = ref<{ state: string; model_memory_mb: number } | null>(null)
+const reindexing = ref(false)
+
+const statusLabel = computed(() => {
+  switch (qmdStatus.value?.state) {
+    case 'running': return 'Running'
+    case 'stopped': return 'Stopped'
+    case 'starting': return 'Initializing (first-time setup may take a few minutes)...'
+    case 'error': return 'Failed'
+    default: return 'Unknown'
+  }
+})
 
 const themeOptions = [
   { label: 'Dark', value: 'dark' },
@@ -62,6 +78,7 @@ onMounted(async () => {
   } catch {
     // May fail if files don't exist yet
   }
+  loadQMDStatus()
 })
 
 async function savePassword() {
@@ -113,6 +130,100 @@ async function handleClearMemory() {
     message.error('Failed to clear memory')
   }
 }
+
+// QMD functions
+async function loadQMDStatus() {
+  try {
+    const { data } = await api.get('/settings/qmd')
+    qmdEnabled.value = data.enabled
+    qmdStatus.value = data.status
+  } catch {
+    // QMD endpoints may not be available
+  }
+}
+
+async function toggleQMD(value: boolean) {
+  qmdLoading.value = true
+  if (value && qmdStatus.value) {
+    qmdStatus.value = { ...qmdStatus.value, state: 'starting' }
+  }
+  try {
+    const { data } = await api.put('/settings/qmd', { enabled: value })
+    if (data.ok) {
+      qmdEnabled.value = value
+      if (data.state === 'starting') {
+        // Background initialization — poll for completion
+        message.info('QMD is initializing (first run may take a few minutes)...')
+        pollQMDUntilReady()
+      } else {
+        if (qmdStatus.value) {
+          qmdStatus.value = { ...qmdStatus.value, state: data.state || 'stopped' }
+        }
+        message.success(value ? 'QMD enabled' : 'QMD disabled')
+        qmdLoading.value = false
+      }
+    } else {
+      message.error(data.error || 'Failed to toggle QMD')
+      qmdEnabled.value = !value
+      if (qmdStatus.value) {
+        qmdStatus.value = { ...qmdStatus.value, state: 'stopped' }
+      }
+      qmdLoading.value = false
+    }
+  } catch (e: any) {
+    const detail = e.response?.data?.detail || 'Failed to toggle QMD'
+    message.error(detail)
+    qmdEnabled.value = !value
+    if (qmdStatus.value) {
+      qmdStatus.value = { ...qmdStatus.value, state: 'stopped' }
+    }
+    qmdLoading.value = false
+  }
+}
+
+async function pollQMDUntilReady(maxWait = 600000) {
+  const start = Date.now()
+  while (Date.now() - start < maxWait) {
+    await new Promise(r => setTimeout(r, 3000))
+    try {
+      const { data } = await api.get('/settings/qmd')
+      qmdStatus.value = data.status
+      qmdEnabled.value = data.enabled
+      if (data.status.state === 'running') {
+        message.success('QMD enabled successfully')
+        qmdLoading.value = false
+        return
+      }
+      if (data.status.state === 'error') {
+        message.error(data.error || 'QMD initialization failed')
+        qmdEnabled.value = false
+        qmdLoading.value = false
+        return
+      }
+      if (data.status.state === 'stopped' && !data.enabled) {
+        // Was disabled while starting
+        qmdLoading.value = false
+        return
+      }
+    } catch {
+      // Network error, keep polling
+    }
+  }
+  message.warning('QMD initialization timed out — check server logs')
+  qmdLoading.value = false
+}
+
+async function reindexQMD() {
+  reindexing.value = true
+  try {
+    await api.post('/settings/qmd/reindex')
+    message.success('Reindex triggered')
+  } catch {
+    message.error('Reindex failed')
+  } finally {
+    reindexing.value = false
+  }
+}
 </script>
 
 <template>
@@ -132,6 +243,42 @@ async function handleClearMemory() {
 
         <div class="settings-section">
           <p class="section-note">Model and provider defaults have been moved to the <strong>Providers</strong> page.</p>
+        </div>
+
+        <div class="settings-section">
+          <h3 class="section-title">Memory Search</h3>
+          <div class="qmd-toggle-row">
+            <div class="qmd-label">
+              <span>QMD Smart Search Engine</span>
+              <NSwitch
+                :value="qmdEnabled"
+                :loading="qmdLoading"
+                :disabled="qmdLoading"
+                @update:value="toggleQMD"
+              />
+            </div>
+            <p class="section-note">
+              When enabled, memory search uses a local AI model for semantic matching
+              with synonym understanding and contextual search. Requires ~1.2GB extra
+              memory (low-memory devices auto-switch to on-demand mode).
+              First-time setup will automatically download and install the required
+              components (~80MB total), which may take 1-2 minutes.
+              Disabling falls back to keyword search without restart.
+            </p>
+          </div>
+          <div class="qmd-status-row" v-if="qmdStatus">
+            <span :class="['status-dot', qmdStatus.state]"></span>
+            <span class="status-text">{{ statusLabel }}</span>
+            <NButton
+              v-if="qmdStatus.state === 'running'"
+              size="small"
+              tertiary
+              @click="reindexQMD"
+              :loading="reindexing"
+            >
+              Reindex
+            </NButton>
+          </div>
         </div>
       </NTabPane>
 
@@ -329,5 +476,49 @@ async function handleClearMemory() {
   font-size: var(--text-sm);
   color: var(--text-secondary);
   margin: 4px 0 0;
+}
+
+/* QMD */
+.qmd-toggle-row {
+  margin-bottom: var(--space-4);
+}
+.qmd-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+  font-weight: 500;
+}
+.qmd-status-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.status-dot.running {
+  background: var(--accent-green, #22c55e);
+}
+.status-dot.stopped {
+  background: var(--text-muted, #6b7280);
+}
+.status-dot.starting {
+  background: var(--accent-yellow, #eab308);
+  animation: pulse 1s infinite;
+}
+.status-dot.error {
+  background: var(--accent-red, #ef4444);
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.status-text {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 </style>

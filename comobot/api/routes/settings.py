@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from comobot.api.deps import get_auth, get_current_user
@@ -25,6 +25,10 @@ class FileContentRequest(BaseModel):
 class DefaultsUpdate(BaseModel):
     model: str | None = None
     provider: str | None = None
+
+
+class QMDSettingsUpdate(BaseModel):
+    enabled: bool
 
 
 @router.get("")
@@ -154,3 +158,129 @@ async def update_defaults(
         config.agents.defaults.provider = body.provider
     save_config(config)
     return {"updated": True}
+
+
+# --- QMD Memory Search Backend ---
+
+
+def _get_memory_backend(request: Request):
+    """Get memory backend from the agent loop instance in app state."""
+    agent = getattr(request.app.state, "agent", None)
+    if agent is None:
+        return None
+    return getattr(agent, "_memory_backend", None)
+
+
+@router.get("/qmd")
+async def get_qmd_settings(
+    request: Request,
+    _user: str = Depends(get_current_user),
+):
+    """Get QMD status and configuration."""
+    config = load_config()
+    qmd_config = config.agents.defaults.memory.qmd
+
+    # Determine running state from live backend if available
+    state = "stopped"
+    error = None
+    backend = _get_memory_backend(request)
+    if backend is not None:
+        from comobot.agent.memory_backend import FallbackBackend
+
+        if isinstance(backend, FallbackBackend):
+            if backend.primary_active:
+                state = "running"
+            elif getattr(backend, "_starting", False):
+                state = "starting"
+            elif getattr(backend, "_start_error", None):
+                state = "error"
+                error = backend._start_error
+                # Clear error after reading
+                backend._start_error = None
+
+    result = {
+        "enabled": qmd_config.enabled,
+        "mode": qmd_config.mode,
+        "status": {
+            "state": state,
+            "model_memory_mb": 1200 if state == "running" else 0,
+        },
+    }
+    if error:
+        result["error"] = error
+    return result
+
+
+@router.put("/qmd")
+async def update_qmd_settings(
+    body: QMDSettingsUpdate,
+    request: Request,
+    _user: str = Depends(get_current_user),
+):
+    """Toggle QMD on/off with hot-swap.
+
+    Enable is async: returns immediately with state='starting',
+    initialization runs in background. Poll GET /qmd for status.
+    Disable is synchronous (fast).
+    """
+    import asyncio
+
+    from loguru import logger
+
+    from comobot.agent.memory_backend import FallbackBackend
+
+    config = load_config()
+    config.agents.defaults.memory.qmd.enabled = body.enabled
+    save_config(config)
+
+    backend = _get_memory_backend(request)
+    if backend is None:
+        logger.warning("QMD toggle: no memory backend available")
+        return {"ok": False, "error": "Memory backend not available", "state": "stopped"}
+
+    if not isinstance(backend, FallbackBackend):
+        logger.warning("QMD toggle: backend is not FallbackBackend, cannot hot-swap")
+        return {"ok": False, "error": "Hot-swap not supported", "state": "stopped"}
+
+    if body.enabled:
+        # Mark as starting immediately, initialize in background
+        backend._starting = True
+        logger.info("QMD toggle: starting initialization in background...")
+
+        async def _enable_bg():
+            try:
+                await backend.enable_primary()
+                logger.info("QMD toggle: primary backend enabled successfully")
+            except Exception as e:
+                logger.error("QMD toggle failed: {}", e)
+                backend._start_error = str(e)
+            finally:
+                backend._starting = False
+
+        asyncio.create_task(_enable_bg())
+        return {"ok": True, "state": "starting"}
+    else:
+        try:
+            logger.info("QMD toggle: disabling primary backend...")
+            await backend.disable_primary()
+            logger.info("QMD toggle: primary backend disabled")
+            return {"ok": True, "state": "stopped"}
+        except Exception as e:
+            logger.error("QMD toggle failed: {}", e)
+            raise HTTPException(status_code=500, detail=f"QMD toggle failed: {e}")
+
+
+@router.post("/qmd/reindex")
+async def reindex_qmd(
+    request: Request,
+    _user: str = Depends(get_current_user),
+):
+    """Manually trigger QMD reindex."""
+    backend = _get_memory_backend(request)
+    if backend is None:
+        raise HTTPException(status_code=503, detail="Memory backend not available")
+    try:
+        await backend.reindex()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Reindex failed: {e}")
+    return {"ok": True}

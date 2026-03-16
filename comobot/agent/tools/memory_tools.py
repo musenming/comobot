@@ -9,14 +9,18 @@ from typing import TYPE_CHECKING, Any
 from comobot.agent.tools.base import Tool
 
 if TYPE_CHECKING:
+    from comobot.agent.memory_backend import MemoryBackend
     from comobot.agent.memory_search import MemorySearchEngine
 
 
 class MemorySearchTool(Tool):
     """Semantic search over memory files (MEMORY.md + daily logs)."""
 
-    def __init__(self, engine: MemorySearchEngine):
+    def __init__(
+        self, engine: MemorySearchEngine | None = None, *, backend: MemoryBackend | None = None
+    ):
         self._engine = engine
+        self._backend = backend
 
     @property
     def name(self) -> str:
@@ -57,20 +61,39 @@ class MemorySearchTool(Tool):
             return "Error: query cannot be empty."
 
         try:
-            results = self._engine.search(query, max_results=max_results)
+            if self._backend:
+                results = await self._backend.search(query, max_results=max_results)
+                return self._format_backend_results(results)
+            elif self._engine:
+                chunks = self._engine.search(query, max_results=max_results)
+                return self._format_engine_results(chunks)
+            else:
+                return "Error: no search backend available."
         except Exception as e:
             return f"Error searching memory: {e}"
 
+    @staticmethod
+    def _format_backend_results(results) -> str:
         if not results:
             return "No matching memories found."
-
         output_parts = []
-        for i, chunk in enumerate(results, 1):
+        for i, r in enumerate(results, 1):
+            output_parts.append(
+                f"**[{i}]** `{r.file_path}` (lines {r.start_line}-{r.end_line}, "
+                f"score: {r.score:.3f})\n{r.content[:700]}"
+            )
+        return "\n\n---\n\n".join(output_parts)
+
+    @staticmethod
+    def _format_engine_results(chunks) -> str:
+        if not chunks:
+            return "No matching memories found."
+        output_parts = []
+        for i, chunk in enumerate(chunks, 1):
             output_parts.append(
                 f"**[{i}]** `{chunk.file_path}` (lines {chunk.start_line}-{chunk.end_line}, "
                 f"score: {chunk.score:.3f})\n{chunk.content[:700]}"
             )
-
         return "\n\n---\n\n".join(output_parts)
 
 
