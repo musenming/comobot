@@ -14,7 +14,7 @@ env/
 .Python
 #Claude 
 .claude/
-*/CLAUDE.md
+CLAUDE.md
 # Testing
 .pytest_cache/
 .coverage
