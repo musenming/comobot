@@ -2,7 +2,7 @@
 import { ref, watch } from 'vue'
 import { NDrawer, NDrawerContent, NForm, NFormItem, NInput, NSelect, NButton, NSpace, NDynamicTags, useMessage } from 'naive-ui'
 import SecretInput from './SecretInput.vue'
-import api from '../api/client'
+import api, { restartGateway } from '../api/client'
 
 const props = defineProps<{
   show: boolean
@@ -36,9 +36,10 @@ async function save() {
   saving.value = true
   try {
     await api.put(`/channels/${props.channelType}/config`, { config: form.value })
-    message.success('Configuration saved')
+    message.success('Configuration saved, restarting gateway...')
     emit('saved')
     emit('update:show', false)
+    restartGateway()
   } catch (e: any) {
     message.error(e.response?.data?.detail || 'Failed to save')
   } finally {

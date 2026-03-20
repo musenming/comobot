@@ -6,7 +6,7 @@ import 'md-editor-v3/lib/style.css'
 import PageLayout from '../components/PageLayout.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { useThemeStore } from '../stores/theme'
-import api from '../api/client'
+import api, { restartGateway } from '../api/client'
 
 const message = useMessage()
 const themeStore = useThemeStore()
@@ -35,6 +35,8 @@ const qmdEnabled = ref(false)
 const qmdLoading = ref(false)
 const qmdStatus = ref<{ state: string; model_memory_mb: number } | null>(null)
 const reindexing = ref(false)
+const qmdGpu = ref<{ available: boolean; name: string | null }>({ available: true, name: null })
+const showNoGpuConfirm = ref(false)
 
 const statusLabel = computed(() => {
   switch (qmdStatus.value?.state) {
@@ -113,7 +115,8 @@ async function saveAgentFile() {
   if (!endpoint) return
   try {
     await api.put(endpoint, { content: currentContent.value })
-    message.success(`${activeAgentFile.value} saved`)
+    message.success(`${activeAgentFile.value} saved, restarting gateway...`)
+    restartGateway()
   } catch {
     message.error('Failed to save')
   } finally {
@@ -137,12 +140,29 @@ async function loadQMDStatus() {
     const { data } = await api.get('/settings/qmd')
     qmdEnabled.value = data.enabled
     qmdStatus.value = data.status
+    if (data.gpu) {
+      qmdGpu.value = data.gpu
+    }
   } catch {
     // QMD endpoints may not be available
   }
 }
 
 async function toggleQMD(value: boolean) {
+  // If enabling without GPU, show confirmation dialog first
+  if (value && !qmdGpu.value.available) {
+    showNoGpuConfirm.value = true
+    return
+  }
+  doToggleQMD(value)
+}
+
+function confirmNoGpuStart() {
+  showNoGpuConfirm.value = false
+  doToggleQMD(true)
+}
+
+async function doToggleQMD(value: boolean) {
   qmdLoading.value = true
   if (value && qmdStatus.value) {
     qmdStatus.value = { ...qmdStatus.value, state: 'starting' }
@@ -266,6 +286,10 @@ async function reindexQMD() {
               Disabling falls back to keyword search without restart.
             </p>
           </div>
+          <div class="qmd-status-row" v-if="!qmdGpu.available && !qmdEnabled">
+            <span class="status-dot warning"></span>
+            <span class="status-text">No GPU detected — CPU mode will be slower</span>
+          </div>
           <div class="qmd-status-row" v-if="qmdStatus">
             <span :class="['status-dot', qmdStatus.state]"></span>
             <span class="status-text">{{ statusLabel }}</span>
@@ -373,6 +397,12 @@ async function reindexQMD() {
       description="This will permanently delete all agent memories. This action cannot be undone."
       danger
       @confirm="handleClearMemory"
+    />
+    <ConfirmDialog
+      v-model:show="showNoGpuConfirm"
+      title="No GPU Detected"
+      description="No GPU was detected on this server. QMD will run in CPU-only mode, which will be significantly slower for embedding and search operations. Are you sure you want to continue?"
+      @confirm="confirmNoGpuStart"
     />
   </PageLayout>
 </template>
@@ -512,6 +542,9 @@ async function reindexQMD() {
 }
 .status-dot.error {
   background: var(--accent-red, #ef4444);
+}
+.status-dot.warning {
+  background: var(--accent-yellow, #eab308);
 }
 @keyframes pulse {
   0%, 100% { opacity: 1; }

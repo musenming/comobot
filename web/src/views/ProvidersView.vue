@@ -6,7 +6,7 @@ import ProviderCard from '../components/ProviderCard.vue'
 import ProviderDrawer from '../components/ProviderDrawer.vue'
 import SkeletonCard from '../components/SkeletonCard.vue'
 import EmptyState from '../components/EmptyState.vue'
-import api from '../api/client'
+import api, { restartGateway } from '../api/client'
 
 const message = useMessage()
 const loading = ref(true)
@@ -53,7 +53,8 @@ async function saveDefaults() {
   savingDefaults.value = true
   try {
     await api.put('/settings/defaults', defaultsForm.value)
-    message.success('Defaults saved')
+    message.success('Defaults saved, restarting gateway...')
+    restartGateway()
   } catch (e: any) {
     message.error(e.response?.data?.detail || 'Failed to save defaults')
   } finally {
@@ -83,8 +84,9 @@ async function testProvider(p: any) {
 async function removeProvider(p: any) {
   try {
     await api.delete(`/providers/${p.provider}/api_key`)
-    message.success('Provider removed')
+    message.success('Provider removed, restarting gateway...')
     await loadProviders()
+    restartGateway()
   } catch (e: any) {
     message.error(e.response?.data?.detail || 'Failed to remove')
   }

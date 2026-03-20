@@ -54,6 +54,7 @@ def create_app(
     from comobot.api.routes.chat import router as chat_router
     from comobot.api.routes.cron import router as cron_router
     from comobot.api.routes.dashboard import router as dashboard_router
+    from comobot.api.routes.gateway import router as gateway_router
     from comobot.api.routes.health import router as health_router
     from comobot.api.routes.knowhow import router as knowhow_router
     from comobot.api.routes.logs import router as logs_router
@@ -68,6 +69,7 @@ def create_app(
 
     app.include_router(health_router)
     app.include_router(auth_router)
+    app.include_router(gateway_router)
     app.include_router(chat_router)
     app.include_router(setup_router)
     app.include_router(webhook_router)
@@ -82,6 +84,19 @@ def create_app(
     app.include_router(settings_router)
     app.include_router(skills_router)
     app.include_router(ws_router)
+
+    # Serve media files from ~/.comobot/media/
+    media_dir = Path.home() / ".comobot" / "media"
+
+    @app.get("/api/media/{filename:path}")
+    async def serve_media(filename: str):
+        """Serve media files (images, etc.) from the comobot media directory."""
+        file_path = (media_dir / filename).resolve()
+        if not str(file_path).startswith(str(media_dir.resolve())):
+            raise HTTPException(status_code=403)
+        if not file_path.is_file():
+            raise HTTPException(status_code=404)
+        return FileResponse(file_path)
 
     # Serve Vue frontend static files if built
     static_dir = None

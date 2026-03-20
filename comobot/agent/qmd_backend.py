@@ -20,6 +20,41 @@ if TYPE_CHECKING:
 QMD_NPM_PACKAGE = "@tobilu/qmd"
 
 
+def detect_gpu() -> dict:
+    """Detect GPU availability. Returns {available: bool, name: str | None}."""
+    # Check NVIDIA GPU
+    try:
+        import subprocess
+
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return {"available": True, "name": result.stdout.strip().split("\n")[0]}
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    # Check ROCm (AMD)
+    try:
+        import subprocess
+
+        result = subprocess.run(
+            ["rocm-smi", "--showproductname"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return {"available": True, "name": "AMD ROCm GPU"}
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    return {"available": False, "name": None}
+
+
 def detect_qmd_mode() -> str:
     """Auto-detect optimal QMD mode based on system memory."""
     try:

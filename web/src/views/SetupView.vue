@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { NForm, NFormItem, NInput, NButton, NSelect, NSpace, NDynamicTags, useMessage } from 'naive-ui'
 import SecretInput from '../components/SecretInput.vue'
-import api from '../api/client'
+import api, { restartGateway } from '../api/client'
 
 interface FieldDef {
   key: string
@@ -43,6 +43,7 @@ const form = ref({
   admin_password_confirm: '',
   provider: null as string | null,
   provider_config: {} as Record<string, string>,
+  model: '',
   channel_type: null as string | null,
   channel_config: {} as Record<string, string | string[]>,
   assistant_name: 'Comobot',
@@ -62,13 +63,13 @@ onMounted(async () => {
     }))
   } catch {
     providerOptions.value = [
-      { label: 'OpenRouter（推荐）', value: 'openrouter', recommended: true, needsKey: true, fields: [{ key: 'api_key', label: 'API Key', type: 'secret', required: true }] },
-      { label: 'OpenAI', value: 'openai', recommended: false, needsKey: true, fields: [{ key: 'api_key', label: 'API Key', type: 'secret', required: true }] },
-      { label: 'Anthropic (Claude)', value: 'anthropic', recommended: false, needsKey: true, fields: [{ key: 'api_key', label: 'API Key', type: 'secret', required: true }] },
-      { label: 'DeepSeek', value: 'deepseek', recommended: false, needsKey: true, fields: [{ key: 'api_key', label: 'API Key', type: 'secret', required: true }] },
-      { label: 'Google Gemini', value: 'gemini', recommended: false, needsKey: true, fields: [{ key: 'api_key', label: 'API Key', type: 'secret', required: true }] },
-      { label: 'MiniMax', value: 'minimax', recommended: false, needsKey: true, fields: [{ key: 'api_key', label: 'API Key', type: 'secret', required: true }] },
-      { label: '本地模型（Ollama）', value: 'ollama', recommended: false, needsKey: false, fields: [{ key: 'api_base', label: 'API Base URL', type: 'text', default: 'http://localhost:11434/v1' }] },
+      { label: 'OpenRouter (Recommended)', value: 'openrouter', recommended: true, needsKey: true, fields: [{ key: 'api_key', label: 'API Key', type: 'secret', required: true }, { key: 'api_base', label: 'API Base URL', type: 'text' }] },
+      { label: 'OpenAI', value: 'openai', recommended: false, needsKey: true, fields: [{ key: 'api_key', label: 'API Key', type: 'secret', required: true }, { key: 'api_base', label: 'API Base URL', type: 'text' }] },
+      { label: 'Anthropic (Claude)', value: 'anthropic', recommended: false, needsKey: true, fields: [{ key: 'api_key', label: 'API Key', type: 'secret', required: true }, { key: 'api_base', label: 'API Base URL', type: 'text' }] },
+      { label: 'DeepSeek', value: 'deepseek', recommended: false, needsKey: true, fields: [{ key: 'api_key', label: 'API Key', type: 'secret', required: true }, { key: 'api_base', label: 'API Base URL', type: 'text' }] },
+      { label: 'Google Gemini', value: 'gemini', recommended: false, needsKey: true, fields: [{ key: 'api_key', label: 'API Key', type: 'secret', required: true }, { key: 'api_base', label: 'API Base URL', type: 'text' }] },
+      { label: 'MiniMax', value: 'minimax', recommended: false, needsKey: true, fields: [{ key: 'api_key', label: 'API Key', type: 'secret', required: true }, { key: 'api_base', label: 'API Base URL', type: 'text' }] },
+      { label: 'Local Model (Ollama)', value: 'ollama', recommended: false, needsKey: false, fields: [{ key: 'api_base', label: 'API Base URL', type: 'text', default: 'http://localhost:11434/v1' }] },
     ]
   }
 
@@ -113,7 +114,7 @@ const providerFields = computed(() => currentProvider.value?.fields || [])
 const channelFields = computed(() => currentChannel.value?.fields || [])
 
 const languageOptions = [
-  { label: '中文（简体）', value: 'zh' },
+  { label: 'Chinese (Simplified)', value: 'zh' },
   { label: 'English', value: 'en' },
 ]
 
@@ -214,7 +215,7 @@ async function validateKey() {
     validateMessage.value = data.message
   } catch (e: any) {
     validateStatus.value = 'error'
-    validateMessage.value = e.response?.data?.detail || '验证请求失败'
+    validateMessage.value = e.response?.data?.detail || 'Validation request failed'
   } finally {
     validating.value = false
   }
@@ -226,6 +227,7 @@ async function finishSetup() {
     await api.post('/setup', {
       admin_password: form.value.admin_password,
       provider: form.value.provider,
+      model: form.value.model || undefined,
       provider_config: form.value.provider_config || undefined,
       api_key: form.value.provider_config['api_key'] || undefined,
       api_base: form.value.provider_config['api_base'] || undefined,
@@ -234,7 +236,8 @@ async function finishSetup() {
       assistant_name: form.value.assistant_name || undefined,
       language: form.value.language || undefined,
     })
-    message.success('Setup complete!')
+    message.success('Setup complete! Restarting gateway...')
+    await restartGateway()
     router.push('/login')
   } catch (e: any) {
     message.error(e.response?.data?.detail || 'Setup failed')
@@ -294,19 +297,19 @@ async function finishSetup() {
 
         <!-- Step 2: Provider -->
         <NForm v-else-if="currentStep === 2" key="step2">
-          <NFormItem label="AI 提供商">
+          <NFormItem label="AI Provider">
             <NSelect
               v-model:value="form.provider"
               :options="providerSelectOptions"
-              placeholder="选择 AI 提供商"
+              placeholder="Select AI Provider"
               clearable
               size="large"
               @update:value="onProviderChange"
             />
           </NFormItem>
           <div v-if="currentProvider?.recommended" class="provider-tip">
-            <span class="tip-badge">⭐ 推荐</span>
-            OpenRouter 支持几乎所有主流模型，新手首选
+            <span class="tip-badge">⭐ Recommended</span>
+            OpenRouter supports almost all mainstream models, ideal for beginners
           </div>
 
           <!-- Dynamic provider fields -->
@@ -330,7 +333,7 @@ async function finishSetup() {
                   style="margin-left: 8px; flex-shrink: 0"
                   @click="validateKey"
                 >
-                  验证
+                  Verify
                 </NButton>
               </div>
               <NInput
@@ -339,6 +342,14 @@ async function finishSetup() {
                 :placeholder="(typeof field.default === 'string' ? field.default : '') || field.label"
                 size="large"
                 @update:value="(v: string) => form.provider_config[field.key] = v"
+              />
+            </NFormItem>
+
+            <NFormItem label="Model">
+              <NInput
+                v-model:value="form.model"
+                placeholder="e.g. anthropic/claude-sonnet-4-5-20250514"
+                size="large"
               />
             </NFormItem>
           </template>
@@ -355,11 +366,11 @@ async function finishSetup() {
 
         <!-- Step 3: Channel (Generic) -->
         <NForm v-else-if="currentStep === 3" key="step3">
-          <NFormItem label="聊天渠道（可选）">
+          <NFormItem label="Chat Channel (Optional)">
             <NSelect
               v-model:value="form.channel_type"
               :options="channelSelectOptions"
-              placeholder="选择聊天渠道"
+              placeholder="Select chat channel"
               clearable
               size="large"
               @update:value="onChannelChange"
@@ -407,20 +418,20 @@ async function finishSetup() {
 
         <!-- Step 4: Complete -->
         <NForm v-else key="step4">
-          <NFormItem label="助手名称">
+          <NFormItem label="Assistant Name">
             <NInput v-model:value="form.assistant_name" placeholder="Comobot" size="large" />
           </NFormItem>
-          <NFormItem label="界面语言">
+          <NFormItem label="Language">
             <NSelect v-model:value="form.language" :options="languageOptions" size="large" />
           </NFormItem>
           <div class="access-url">
-            <span class="url-label">完成后访问：</span>
+            <span class="url-label">Access after setup:</span>
             <span class="url-value">{{ accessUrl }}</span>
           </div>
           <NSpace justify="space-between" style="margin-top: 24px">
             <NButton size="large" @click="prevStep">Back</NButton>
             <NButton type="primary" size="large" :loading="loading" @click="finishSetup">
-              开始使用
+              Get Started
             </NButton>
           </NSpace>
         </NForm>

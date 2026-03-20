@@ -12,6 +12,7 @@ from comobot.security.auth import AuthManager
 router = APIRouter(prefix="/api/settings")
 
 DATA_DIR = Path.home() / ".comobot"
+WORKSPACE_DIR = DATA_DIR / "workspace"
 
 
 class ChangePasswordRequest(BaseModel):
@@ -51,15 +52,15 @@ async def change_password(
 # --- Agent config files ---
 
 
-def _read_file(name: str) -> str:
-    path = DATA_DIR / name
+def _read_file(name: str, base: Path = WORKSPACE_DIR) -> str:
+    path = base / name
     if path.exists():
         return path.read_text(encoding="utf-8")
     return ""
 
 
-def _write_file(name: str, content: str) -> None:
-    path = DATA_DIR / name
+def _write_file(name: str, content: str, base: Path = WORKSPACE_DIR) -> None:
+    path = base / name
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
 
@@ -128,7 +129,7 @@ async def update_agents_md(
 
 @router.get("/memory")
 async def get_memory(_user: str = Depends(get_current_user)):
-    return {"content": _read_file("workspace/MEMORY.md")}
+    return {"content": _read_file("MEMORY.md")}
 
 
 @router.delete("/memory")
@@ -198,6 +199,9 @@ async def get_qmd_settings(
                 # Clear error after reading
                 backend._start_error = None
 
+    from comobot.agent.qmd_backend import detect_gpu
+
+    gpu_info = detect_gpu()
     result = {
         "enabled": qmd_config.enabled,
         "mode": qmd_config.mode,
@@ -205,6 +209,7 @@ async def get_qmd_settings(
             "state": state,
             "model_memory_mb": 1200 if state == "running" else 0,
         },
+        "gpu": gpu_info,
     }
     if error:
         result["error"] = error

@@ -5,7 +5,7 @@ import {
   NInput, useMessage,
 } from 'naive-ui'
 import SecretInput from './SecretInput.vue'
-import api from '../api/client'
+import api, { restartGateway } from '../api/client'
 
 const props = defineProps<{
   show: boolean
@@ -110,9 +110,10 @@ async function save() {
       api_base: form.value.api_base || null,
       extra_headers: Object.keys(extraHeaders).length > 0 ? extraHeaders : null,
     })
-    message.success('Provider saved')
+    message.success('Provider saved, restarting gateway...')
     emit('saved')
     emit('update:show', false)
+    restartGateway()
   } catch (e: any) {
     message.error(e.response?.data?.detail || 'Failed to save')
   } finally {

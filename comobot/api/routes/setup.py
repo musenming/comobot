@@ -40,6 +40,7 @@ class SetupRequest(BaseModel):
     admin_username: str = "admin"
     admin_password: str
     provider: str | None = None
+    model: str | None = None
     api_key: str | None = None
     api_base: str | None = None
     provider_config: dict[str, str] | None = None  # Generic provider config fields
@@ -71,7 +72,7 @@ _PROVIDERS: list[dict[str, Any]] = [
         "name": "OpenRouter（推荐）",
         "recommended": True,
         "needs_key": True,
-        "fields": [_KEY_FIELD],
+        "fields": [_KEY_FIELD, _BASE_FIELD],
     },
     {
         "id": "openai",
@@ -92,70 +93,70 @@ _PROVIDERS: list[dict[str, Any]] = [
         "name": "DeepSeek",
         "recommended": False,
         "needs_key": True,
-        "fields": [_KEY_FIELD],
+        "fields": [_KEY_FIELD, _BASE_FIELD],
     },
     {
         "id": "gemini",
         "name": "Google Gemini",
         "recommended": False,
         "needs_key": True,
-        "fields": [_KEY_FIELD],
+        "fields": [_KEY_FIELD, _BASE_FIELD],
     },
     {
         "id": "dashscope",
         "name": "阿里云百炼 (DashScope)",
         "recommended": False,
         "needs_key": True,
-        "fields": [_KEY_FIELD],
+        "fields": [_KEY_FIELD, _BASE_FIELD],
     },
     {
         "id": "moonshot",
         "name": "Moonshot (Kimi)",
         "recommended": False,
         "needs_key": True,
-        "fields": [_KEY_FIELD],
+        "fields": [_KEY_FIELD, _BASE_FIELD],
     },
     {
         "id": "zhipu",
         "name": "智谱 AI (GLM)",
         "recommended": False,
         "needs_key": True,
-        "fields": [_KEY_FIELD],
+        "fields": [_KEY_FIELD, _BASE_FIELD],
     },
     {
         "id": "siliconflow",
         "name": "硅基流动 (SiliconFlow)",
         "recommended": False,
         "needs_key": True,
-        "fields": [_KEY_FIELD],
+        "fields": [_KEY_FIELD, _BASE_FIELD],
     },
     {
         "id": "volcengine",
         "name": "火山引擎 (VolcEngine)",
         "recommended": False,
         "needs_key": True,
-        "fields": [_KEY_FIELD],
+        "fields": [_KEY_FIELD, _BASE_FIELD],
     },
     {
         "id": "groq",
         "name": "Groq",
         "recommended": False,
         "needs_key": True,
-        "fields": [_KEY_FIELD],
+        "fields": [_KEY_FIELD, _BASE_FIELD],
     },
     {
         "id": "aihubmix",
         "name": "AiHubMix",
         "recommended": False,
         "needs_key": True,
-        "fields": [_KEY_FIELD],
+        "fields": [_KEY_FIELD, _BASE_FIELD],
     },
     {
         "id": "minimax",
         "name": "MiniMax",
         "recommended": False,
         "needs_key": True,
-        "fields": [_KEY_FIELD],
+        "fields": [_KEY_FIELD, _BASE_FIELD],
     },
     {
         "id": "custom",
@@ -370,6 +371,12 @@ async def setup(
         config.channels.telegram.mode = body.telegram_mode
         if body.allowed_users:
             config.channels.telegram.allow_from = body.allowed_users
+
+    # --- Model & provider defaults ---
+    if body.model:
+        config.agents.defaults.model = body.model
+    if body.provider:
+        config.agents.defaults.provider = body.provider
 
     if body.assistant_name:
         config.assistant_name = body.assistant_name

@@ -24,4 +24,16 @@ api.interceptors.response.use(
   }
 )
 
+/**
+ * Request a gateway restart after config changes.
+ * Fire-and-forget: the server will terminate after responding.
+ */
+export async function restartGateway(): Promise<void> {
+  try {
+    await api.post('/gateway/restart')
+  } catch {
+    // Expected — the server shuts down, so the request may fail
+  }
+}
+
 export default api

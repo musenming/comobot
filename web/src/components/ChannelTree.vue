@@ -69,7 +69,7 @@ function getSessionTitle(session: ChannelSession): string {
 }
 
 function getSessionPreview(session: ChannelSession): string {
-  return (session.last_message_preview || '').trim() || '暂无消息内容'
+  return (session.last_message_preview || '').trim() || 'No messages yet'
 }
 
 function emitSessionMeta(session: ChannelSession) {

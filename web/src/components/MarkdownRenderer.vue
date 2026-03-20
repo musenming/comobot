@@ -149,4 +149,11 @@ const rendered = computed(() => {
   padding-left: var(--space-6);
   margin: var(--space-2) 0;
 }
+.markdown-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  margin: var(--space-2) 0;
+  cursor: pointer;
+}
 </style>

@@ -4,6 +4,7 @@ import asyncio
 import os
 import select
 import signal
+import subprocess
 import sys
 from pathlib import Path
 
@@ -29,6 +30,88 @@ app = typer.Typer(
 
 console = Console()
 EXIT_COMMANDS = {"exit", "quit", "/exit", "/quit", ":q"}
+
+
+def _get_pid_file() -> Path:
+    """Return the path to the gateway PID file."""
+    from comobot.config.loader import get_data_dir
+
+    return get_data_dir() / "gateway.pid"
+
+
+def _get_log_dir() -> Path:
+    """Return the path to the logs directory (~/.comobot/logs/)."""
+    from comobot.config.loader import get_data_dir
+
+    log_dir = get_data_dir() / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    return log_dir
+
+
+def _write_pid_file() -> None:
+    """Write the current process PID to the PID file."""
+    pid_file = _get_pid_file()
+    pid_file.parent.mkdir(parents=True, exist_ok=True)
+    pid_file.write_text(str(os.getpid()))
+
+
+def _remove_pid_file() -> None:
+    """Remove the PID file if it exists."""
+    pid_file = _get_pid_file()
+    if pid_file.exists():
+        pid_file.unlink(missing_ok=True)
+
+
+def _read_pid() -> int | None:
+    """Read the gateway PID from the PID file. Returns None if not found or stale."""
+    pid_file = _get_pid_file()
+    if not pid_file.exists():
+        return None
+    try:
+        pid = int(pid_file.read_text().strip())
+        # Check if process is still running
+        os.kill(pid, 0)
+        return pid
+    except (ValueError, ProcessLookupError, PermissionError):
+        _remove_pid_file()
+        return None
+
+
+def _stop_gateway(port: int = 18790) -> bool:
+    """Stop the running gateway process. Returns True if a process was stopped."""
+    stopped = False
+
+    # Try PID file first
+    pid = _read_pid()
+    if pid:
+        try:
+            os.kill(pid, signal.SIGTERM)
+            console.print(f"  [green]✓[/green] Sent SIGTERM to gateway (pid={pid})")
+            stopped = True
+        except ProcessLookupError:
+            pass
+        _remove_pid_file()
+
+    # Also try by port as fallback
+    my_pid = str(os.getpid())
+    try:
+        result = subprocess.run(
+            ["lsof", "-ti", f"tcp:{port}"],
+            capture_output=True,
+            text=True,
+        )
+        for p in result.stdout.strip().splitlines():
+            p = p.strip()
+            if p and p != my_pid:
+                subprocess.run(["kill", p], capture_output=True)
+                if not stopped:
+                    console.print(f"  [green]✓[/green] Stopped process on port {port} (pid={p})")
+                stopped = True
+    except FileNotFoundError:
+        pass
+
+    return stopped
+
 
 # ---------------------------------------------------------------------------
 # CLI input: prompt_toolkit for editing, paste, history, and display
@@ -275,13 +358,33 @@ def _make_provider(config: Config, require_key: bool = True):
 # Gateway / Server
 # ============================================================================
 
+gateway_app = typer.Typer(
+    name="gateway",
+    help="Manage the comobot gateway.",
+    invoke_without_command=True,
+)
+app.add_typer(gateway_app)
 
-@app.command()
+
+@gateway_app.callback()
 def gateway(
+    ctx: typer.Context,
     port: int = typer.Option(18790, "--port", "-p", help="Gateway port"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
 ):
+    """Start the comobot gateway (or manage it with subcommands)."""
+    if ctx.invoked_subcommand is not None:
+        return
+    _gateway_start(port=port, verbose=verbose)
+
+
+def _gateway_start(
+    port: int = 18790,
+    verbose: bool = False,
+):
     """Start the comobot gateway."""
+    from loguru import logger
+
     from comobot.agent.loop import AgentLoop
     from comobot.bus.queue import MessageBus
     from comobot.channels.manager import ChannelManager
@@ -295,6 +398,22 @@ def gateway(
         import logging
 
         logging.basicConfig(level=logging.DEBUG)
+
+    # Configure loguru file logging
+    log_file = _get_log_dir() / "gateway.log"
+    logger.add(
+        str(log_file),
+        rotation="10 MB",
+        retention="7 days",
+        level="DEBUG" if verbose else "INFO",
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level:<8} | {name}:{function}:{line} | {message}",
+        enqueue=True,
+    )
+    logger.enable("comobot")
+
+    # Write PID file and store port for restart API
+    _write_pid_file()
+    os.environ["COMOBOT_PORT"] = str(port)
 
     console.print(f"{__logo__} Starting comobot gateway on port {port}...")
 
@@ -563,6 +682,7 @@ def gateway(
                 except Exception:
                     pass
 
+            _remove_pid_file()
             console.print("[green]Shutdown complete.[/green]")
             shutdown_event.set()
 
@@ -657,8 +777,66 @@ def gateway(
                         await db.close()
                     except Exception:
                         pass
+                _remove_pid_file()
 
     asyncio.run(run())
+
+
+@gateway_app.command()
+def restart(
+    port: int = typer.Option(18790, "--port", "-p", help="Gateway port"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
+):
+    """Restart the comobot gateway."""
+    import time
+
+    console.print("[yellow]Stopping gateway...[/yellow]")
+    stopped = _stop_gateway(port)
+    if stopped:
+        # Wait for the old process to release the port
+        for _ in range(30):
+            try:
+                result = subprocess.run(
+                    ["lsof", "-ti", f"tcp:{port}"],
+                    capture_output=True,
+                    text=True,
+                )
+                if not result.stdout.strip():
+                    break
+            except FileNotFoundError:
+                break
+            time.sleep(0.5)
+        console.print("[green]Gateway stopped.[/green]")
+    else:
+        console.print("[dim]No running gateway found.[/dim]")
+
+    console.print("[yellow]Starting gateway...[/yellow]")
+
+    # Determine the comobot executable path
+    comobot_bin = sys.executable.replace("/python", "/comobot")
+    if not Path(comobot_bin).exists():
+        # Fallback: use sys.argv[0] or search PATH
+        comobot_bin = "comobot"
+
+    cmd = [comobot_bin, "gateway", "--port", str(port)]
+    if verbose:
+        cmd.append("--verbose")
+
+    log_file = _get_log_dir() / "gateway.log"
+
+    # Start gateway as a detached background process
+    with open(log_file, "a") as lf:
+        proc = subprocess.Popen(
+            cmd,
+            stdout=lf,
+            stderr=lf,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+
+    console.print(f"[green]✓[/green] Gateway started (pid={proc.pid})")
+    console.print(f"[green]✓[/green] Logs: {log_file}")
+    console.print(f"[green]✓[/green] Web panel: http://localhost:{port}")
 
 
 # ============================================================================

@@ -736,8 +736,23 @@ class AgentLoop:
         if msg.channel != "web":
             await self._broadcast_session_messages(key, new_msgs)
 
-        if (mt := self.tools.get("message")) and isinstance(mt, MessageTool) and mt._sent_in_turn:
-            return None
+        if (mt := self.tools.get("message")) and isinstance(mt, MessageTool):
+            if mt._sent_in_turn:
+                return None
+            # Mirror cross-channel messages back to web UI
+            if msg.channel == "web" and mt._cross_channel_messages:
+                parts = []
+                for xmsg in mt._cross_channel_messages:
+                    parts.append(xmsg["content"])
+                    for media_path in xmsg.get("media", []):
+                        fname = media_path.rsplit("/", 1)[-1] if "/" in media_path else media_path
+                        parts.append(f"![{fname}](/api/media/{fname})")
+                mirrored = "\n\n".join(parts)
+                # Prepend mirrored content to the final response
+                if final_content:
+                    final_content = mirrored + "\n\n" + final_content
+                else:
+                    final_content = mirrored
 
         preview = final_content[:120] + "..." if len(final_content) > 120 else final_content
         logger.info("Response to {}:{}: {}", msg.channel, msg.sender_id, preview)
