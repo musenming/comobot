@@ -7,9 +7,11 @@ import WorkflowCard from '../components/WorkflowCard.vue'
 import SkeletonCard from '../components/SkeletonCard.vue'
 import EmptyState from '../components/EmptyState.vue'
 import api from '../api/client'
+import { useI18n } from '../composables/useI18n'
 
 const router = useRouter()
 const message = useMessage()
+const { t } = useI18n()
 const loading = ref(true)
 const workflows = ref<any[]>([])
 const templates = ref<any[]>([])
@@ -44,36 +46,36 @@ async function toggleWorkflow(wf: any) {
     await api.put(`/workflows/${wf.id}`, { enabled: !wf.enabled })
     await loadWorkflows()
   } catch {
-    message.error('Failed to update workflow')
+    message.error(t('workflows.failedUpdate'))
   }
 }
 
 async function duplicateWorkflow(wf: any) {
   try {
     await api.post(`/workflows/${wf.id}/duplicate`)
-    message.success('Workflow duplicated')
+    message.success(t('workflows.duplicated'))
     await loadWorkflows()
   } catch {
-    message.error('Failed to duplicate')
+    message.error(t('workflows.failedDuplicate'))
   }
 }
 
 async function runWorkflow(wf: any) {
   try {
     await api.post(`/workflows/${wf.id}/run`)
-    message.success('Workflow triggered')
+    message.success(t('workflows.triggered'))
   } catch (e: any) {
-    message.error(e.response?.data?.detail || 'Failed to run')
+    message.error(e.response?.data?.detail || t('workflows.failedRun'))
   }
 }
 
 async function deleteWorkflow(wf: any) {
   try {
     await api.delete(`/workflows/${wf.id}`)
-    message.success('Workflow deleted')
+    message.success(t('workflows.deleted'))
     await loadWorkflows()
   } catch {
-    message.error('Failed to delete')
+    message.error(t('workflows.failedDelete'))
   }
 }
 
@@ -108,7 +110,7 @@ function onTemplateSelect(id: string) {
 
 async function createFromTemplate() {
   if (!selectedTemplate.value || !workflowName.value) {
-    message.warning('Please select a template and enter a name')
+    message.warning(t('workflows.selectTemplateWarn'))
     return
   }
   try {
@@ -117,11 +119,11 @@ async function createFromTemplate() {
       name: workflowName.value,
       params: templateForm.value,
     })
-    message.success('Workflow created')
+    message.success(t('workflows.created'))
     showTemplateModal.value = false
     await loadWorkflows()
   } catch (e: any) {
-    message.error(e.response?.data?.detail || 'Failed to create workflow')
+    message.error(e.response?.data?.detail || t('workflows.failedCreate'))
   }
 }
 
@@ -132,17 +134,17 @@ onMounted(() => {
 </script>
 
 <template>
-  <PageLayout title="Createflow" description="Build and manage your automation workflows">
+  <PageLayout :title="t('workflows.title')" :description="t('workflows.subtitle')">
     <template #actions>
-      <NButton type="primary" @click="openNew">+ New Workflow</NButton>
+      <NButton type="primary" @click="openNew">{{ t('workflows.newWorkflow') }}</NButton>
     </template>
 
     <div v-if="loading" class="wf-grid">
       <SkeletonCard v-for="i in 3" :key="i" height="200px" />
     </div>
     <template v-else-if="workflows.length === 0">
-      <EmptyState icon="⚡" title="No workflows yet" description="Create your first workflow to automate tasks.">
-        <NButton type="primary" @click="openNew">+ New Workflow</NButton>
+      <EmptyState icon="⚡" :title="t('workflows.noWorkflows')" :description="t('workflows.noWorkflowsDesc')">
+        <NButton type="primary" @click="openNew">{{ t('workflows.newWorkflow') }}</NButton>
       </EmptyState>
     </template>
     <div v-else class="wf-grid">
@@ -159,34 +161,34 @@ onMounted(() => {
     </div>
 
     <!-- Mode Selection Modal -->
-    <NModal v-model:show="showModeModal" preset="card" title="Create Workflow" style="width: 400px;">
+    <NModal v-model:show="showModeModal" preset="card" :title="t('workflows.createWorkflow')" style="width: 400px;">
       <div class="mode-grid">
         <div class="mode-option" @click="chooseTemplate">
           <div class="mode-icon">📋</div>
-          <div class="mode-label">Template</div>
-          <div class="mode-desc">Quick start with presets</div>
+          <div class="mode-label">{{ t('workflows.template') }}</div>
+          <div class="mode-desc">{{ t('workflows.quickStart') }}</div>
         </div>
         <div class="mode-option" @click="chooseAdvanced">
           <div class="mode-icon">🎨</div>
-          <div class="mode-label">Advanced</div>
-          <div class="mode-desc">Custom flow editor</div>
+          <div class="mode-label">{{ t('workflows.advanced') }}</div>
+          <div class="mode-desc">{{ t('workflows.customEditor') }}</div>
         </div>
       </div>
     </NModal>
 
     <!-- Template Modal -->
-    <NModal v-model:show="showTemplateModal" preset="card" title="Create from Template" style="width: 520px;">
+    <NModal v-model:show="showTemplateModal" preset="card" :title="t('workflows.createFromTemplate')" style="width: 520px;">
       <NForm>
-        <NFormItem label="Template">
+        <NFormItem :label="t('workflows.template')">
           <NSelect
             :value="selectedTemplate"
-            :options="templates.map((t: any) => ({ label: t.name, value: t.id }))"
+            :options="templates.map((tpl: any) => ({ label: tpl.name, value: tpl.id }))"
             placeholder="Select a template"
             @update:value="onTemplateSelect"
           />
         </NFormItem>
-        <NFormItem label="Workflow Name">
-          <NInput v-model:value="workflowName" placeholder="Name" />
+        <NFormItem :label="t('workflows.workflowName')">
+          <NInput v-model:value="workflowName" :placeholder="t('common.name')" />
         </NFormItem>
         <template v-if="selectedTemplate">
           <NFormItem v-for="p in templates.find((t: any) => t.id === selectedTemplate)?.params" :key="p.key" :label="p.label">
@@ -194,8 +196,8 @@ onMounted(() => {
           </NFormItem>
         </template>
         <NSpace justify="end">
-          <NButton @click="showTemplateModal = false">Cancel</NButton>
-          <NButton type="primary" @click="createFromTemplate">Create</NButton>
+          <NButton @click="showTemplateModal = false">{{ t('common.cancel') }}</NButton>
+          <NButton type="primary" @click="createFromTemplate">{{ t('common.create') }}</NButton>
         </NSpace>
       </NForm>
     </NModal>

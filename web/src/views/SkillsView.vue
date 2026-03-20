@@ -6,7 +6,9 @@ import PageLayout from '../components/PageLayout.vue'
 import SkeletonCard from '../components/SkeletonCard.vue'
 import EmptyState from '../components/EmptyState.vue'
 import api from '../api/client'
+import { useI18n } from '../composables/useI18n'
 
+const { t } = useI18n()
 const message = useMessage()
 const loading = ref(true)
 const skills = ref<any[]>([])
@@ -50,7 +52,7 @@ async function viewSkill(name: string) {
     const { data } = await api.get(`/skills/${encodeURIComponent(name)}`)
     selectedSkill.value = data
   } catch {
-    message.error('Failed to load skill details')
+    message.error(t('skills.failedLoadDetails'))
     showDetail.value = false
   } finally {
     loadingDetail.value = false
@@ -60,12 +62,12 @@ async function viewSkill(name: string) {
 async function deleteSkill(name: string) {
   try {
     await api.delete(`/skills/${encodeURIComponent(name)}`)
-    message.success(`Deleted ${name}`)
+    message.success(t('skills.deletedName', { name }))
     showDetail.value = false
     selectedSkill.value = null
     await loadSkills()
   } catch (e: any) {
-    message.error(e.response?.data?.detail || 'Failed to delete')
+    message.error(e.response?.data?.detail || t('skills.failedDeleteSkill'))
   }
 }
 
@@ -78,7 +80,7 @@ async function searchClawhub() {
     const { data } = await api.get('/skills/search', { params: { q, limit: 10 } })
     searchResults.value = data.results || []
   } catch (e: any) {
-    message.error(e.response?.data?.detail || 'Search failed')
+    message.error(e.response?.data?.detail || t('skills.searchFailed'))
   } finally {
     searching.value = false
   }
@@ -88,10 +90,10 @@ async function installSkill(slug: string) {
   installingSlug.value = slug
   try {
     await api.post('/skills/install', { slug })
-    message.success(`Installed ${slug}`)
+    message.success(t('skills.installedSlug', { slug }))
     await loadSkills()
   } catch (e: any) {
-    message.error(e.response?.data?.detail || 'Install failed')
+    message.error(e.response?.data?.detail || t('skills.installFailed'))
   } finally {
     installingSlug.value = ''
   }
@@ -106,11 +108,11 @@ async function handleUpload({ file }: { file: UploadFileInfo }) {
     await api.post('/skills/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
-    message.success('Skill uploaded')
+    message.success(t('skills.skillUploaded'))
     showUpload.value = false
     await loadSkills()
   } catch (e: any) {
-    message.error(e.response?.data?.detail || 'Upload failed')
+    message.error(e.response?.data?.detail || t('skills.uploadFailed'))
   } finally {
     uploading.value = false
   }
@@ -120,24 +122,24 @@ onMounted(loadSkills)
 </script>
 
 <template>
-  <PageLayout title="Skills" description="Manage agent skills">
+  <PageLayout :title="t('skills.title')" :description="t('skills.subtitle')">
     <!-- Actions bar -->
     <div class="skills-actions">
       <div class="search-row">
         <NInput
           v-model:value="searchQuery"
-          placeholder="Filter skills or search clawhub..."
+          :placeholder="t('skills.filterPlaceholder')"
           clearable
           @keydown.enter="searchClawhub"
         />
-        <NButton @click="searchClawhub" :loading="searching">Search Clawhub</NButton>
-        <NButton @click="showUpload = true">Upload</NButton>
+        <NButton @click="searchClawhub" :loading="searching">{{ t('skills.searchClawhub') }}</NButton>
+        <NButton @click="showUpload = true">{{ t('common.upload') }}</NButton>
       </div>
     </div>
 
     <!-- Clawhub search results -->
     <div v-if="searchResults.length > 0" class="clawhub-results">
-      <div class="section-label">Clawhub Results</div>
+      <div class="section-label">{{ t('skills.clawhubResults') }}</div>
       <div class="result-list">
         <div v-for="(r, i) in searchResults" :key="i" class="result-item">
           <span class="result-text">{{ r.raw }}</span>
@@ -147,7 +149,7 @@ onMounted(loadSkills)
             :loading="installingSlug === r.raw.split(/\s+/)[0]"
             @click="installSkill(r.raw.split(/\s+/)[0])"
           >
-            Install
+            {{ t('common.install') }}
           </NButton>
         </div>
       </div>
@@ -159,7 +161,7 @@ onMounted(loadSkills)
     </div>
 
     <template v-else-if="filteredSkills.length === 0">
-      <EmptyState icon="◆" title="No skills found" description="Install skills from Clawhub or upload custom skills." />
+      <EmptyState icon="◆" :title="t('skills.noSkillsFound')" :description="t('skills.noSkillsFoundDesc')" />
     </template>
 
     <div v-else class="skills-grid">
@@ -175,10 +177,10 @@ onMounted(loadSkills)
             {{ s.source }}
           </NTag>
         </div>
-        <div class="skill-desc">{{ s.description || 'No description' }}</div>
+        <div class="skill-desc">{{ s.description || t('skills.noDescription') }}</div>
         <div class="skill-status">
           <NTag :type="s.available ? 'success' : 'warning'" size="small">
-            {{ s.available ? 'Available' : 'Unavailable' }}
+            {{ s.available ? t('skills.available') : t('skills.unavailable') }}
           </NTag>
         </div>
       </div>
@@ -193,25 +195,25 @@ onMounted(loadSkills)
             {{ selectedSkill.source }}
           </NTag>
           <NTag :type="selectedSkill.available ? 'success' : 'warning'" size="small">
-            {{ selectedSkill.available ? 'Available' : 'Unavailable' }}
+            {{ selectedSkill.available ? t('skills.available') : t('skills.unavailable') }}
           </NTag>
         </div>
         <pre class="skill-content">{{ selectedSkill.content }}</pre>
         <div v-if="selectedSkill.source === 'workspace'" class="detail-actions">
-          <NButton type="error" @click="deleteSkill(selectedSkill.name)">Delete Skill</NButton>
+          <NButton type="error" @click="deleteSkill(selectedSkill.name)">{{ t('skills.deleteSkill') }}</NButton>
         </div>
       </template>
     </NModal>
 
     <!-- Upload Modal -->
-    <NModal v-model:show="showUpload" preset="card" title="Upload Skill" style="max-width: 480px;">
-      <p class="upload-hint">Upload a SKILL.md file or a .zip archive containing SKILL.md.</p>
+    <NModal v-model:show="showUpload" preset="card" :title="t('skills.uploadSkill')" style="max-width: 480px;">
+      <p class="upload-hint">{{ t('skills.uploadSkillDesc') }}</p>
       <NUpload
         :custom-request="({ file }: any) => handleUpload({ file })"
         :show-file-list="false"
         accept=".md,.zip"
       >
-        <NButton :loading="uploading">Choose File</NButton>
+        <NButton :loading="uploading">{{ t('skills.chooseFile') }}</NButton>
       </NUpload>
     </NModal>
   </PageLayout>

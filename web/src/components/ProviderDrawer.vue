@@ -6,6 +6,7 @@ import {
 } from 'naive-ui'
 import SecretInput from './SecretInput.vue'
 import api, { restartGateway } from '../api/client'
+import { useI18n } from '../composables/useI18n'
 
 const props = defineProps<{
   show: boolean
@@ -17,6 +18,7 @@ const emit = defineEmits<{
   (e: 'saved'): void
 }>()
 
+const { t } = useI18n()
 const message = useMessage()
 const saving = ref(false)
 const testing = ref(false)
@@ -89,7 +91,7 @@ function removeHeader(index: number) {
 
 async function save() {
   if (!form.value.provider) {
-    message.warning('Please select a provider')
+    message.warning(t('providers.selectProviderWarn'))
     return
   }
   saving.value = true
@@ -110,12 +112,12 @@ async function save() {
       api_base: form.value.api_base || null,
       extra_headers: Object.keys(extraHeaders).length > 0 ? extraHeaders : null,
     })
-    message.success('Provider saved, restarting gateway...')
+    message.success(t('providers.saved'))
     emit('saved')
     emit('update:show', false)
     restartGateway()
   } catch (e: any) {
-    message.error(e.response?.data?.detail || 'Failed to save')
+    message.error(e.response?.data?.detail || t('providers.failedSaveProvider'))
   } finally {
     saving.value = false
   }
@@ -126,9 +128,9 @@ async function test() {
   testing.value = true
   try {
     const { data } = await api.post(`/providers/${form.value.provider}/test`)
-    message.success(`Test passed - ${data.key_prefix} (${data.latency_ms}ms)`)
+    message.success(`${t('providers.testPassed')} ${data.key_prefix} (${data.latency_ms}ms)`)
   } catch (e: any) {
-    message.error(e.response?.data?.detail || 'Test failed')
+    message.error(e.response?.data?.detail || t('providers.testFailed'))
   } finally {
     testing.value = false
   }
@@ -137,30 +139,30 @@ async function test() {
 
 <template>
   <NDrawer :show="show" :width="480" placement="right" @update:show="(v: boolean) => emit('update:show', v)">
-    <NDrawerContent :title="editProvider ? `Edit ${editProvider}` : 'Add Provider'">
+    <NDrawerContent :title="editProvider ? t('providers.editProvider', { name: editProvider }) : t('providers.addProviderTitle')">
       <NForm label-placement="top">
-        <NFormItem label="Provider">
+        <NFormItem :label="t('providers.provider')">
           <NSelect
             v-model:value="form.provider"
             :options="providerOptions"
             :disabled="!!editProvider"
-            placeholder="Select provider"
+            :placeholder="t('providers.selectProvider')"
           />
         </NFormItem>
-        <NFormItem label="API Key">
+        <NFormItem :label="t('providers.apiKey')">
           <SecretInput
             :value="form.api_key"
-            placeholder="Enter API key"
+            :placeholder="t('providers.enterApiKey')"
             @update:value="(v: string) => form.api_key = v"
           />
         </NFormItem>
-        <NFormItem label="API Base URL">
+        <NFormItem :label="t('providers.apiBaseUrl')">
           <NInput
             v-model:value="form.api_base"
             placeholder="https://api.example.com/v1"
           />
         </NFormItem>
-        <NFormItem label="Extra Headers">
+        <NFormItem :label="t('providers.extraHeaders')">
           <div style="width: 100%">
             <div
               v-for="(header, index) in form.extra_headers"
@@ -169,29 +171,29 @@ async function test() {
             >
               <NInput
                 v-model:value="header.key"
-                placeholder="Header name"
+                :placeholder="t('providers.headerName')"
                 style="flex: 1"
               />
               <NInput
                 v-model:value="header.value"
-                placeholder="Header value"
+                :placeholder="t('providers.headerValue')"
                 style="flex: 1"
               />
               <NButton quaternary size="small" @click="removeHeader(index)">
                 ✕
               </NButton>
             </div>
-            <NButton size="small" dashed @click="addHeader">+ Add Header</NButton>
+            <NButton size="small" dashed @click="addHeader">{{ t('providers.addHeader') }}</NButton>
           </div>
         </NFormItem>
       </NForm>
 
       <template #footer>
         <NSpace justify="space-between" style="width: 100%">
-          <NButton :loading="testing" @click="test">Test Connection</NButton>
+          <NButton :loading="testing" @click="test">{{ t('channels.testConnection') }}</NButton>
           <NSpace>
-            <NButton @click="emit('update:show', false)">Cancel</NButton>
-            <NButton type="primary" :loading="saving" @click="save">Save</NButton>
+            <NButton @click="emit('update:show', false)">{{ t('common.cancel') }}</NButton>
+            <NButton type="primary" :loading="saving" @click="save">{{ t('common.save') }}</NButton>
           </NSpace>
         </NSpace>
       </template>

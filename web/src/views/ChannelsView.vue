@@ -6,7 +6,10 @@ import ChannelCard from '../components/ChannelCard.vue'
 import ChannelConfigDrawer from '../components/ChannelConfigDrawer.vue'
 import SkeletonCard from '../components/SkeletonCard.vue'
 import { useWebSocket } from '../composables/useWebSocket'
+import { useI18n } from '../composables/useI18n'
 import api from '../api/client'
+
+const { t } = useI18n()
 
 const message = useMessage()
 const loading = ref(true)
@@ -20,7 +23,7 @@ async function loadChannels() {
     const { data } = await api.get('/channels')
     channels.value = data
   } catch {
-    message.error('Failed to load channels')
+    message.error(t('channels.failedLoad'))
   } finally {
     loading.value = false
   }
@@ -35,9 +38,9 @@ function openConfig(ch: any) {
 async function testChannel(ch: any) {
   try {
     const { data } = await api.post(`/channels/${ch.type}/test`)
-    message.success(data.message || 'Test passed')
+    message.success(data.message || t('channels.testPassed'))
   } catch (e: any) {
-    message.error(e.response?.data?.detail || 'Test failed')
+    message.error(e.response?.data?.detail || t('channels.testFailed'))
   }
 }
 
@@ -57,7 +60,7 @@ watch(wsStatus, (s) => {
 </script>
 
 <template>
-  <PageLayout title="Channels" description="Manage your communication channels">
+  <PageLayout :title="t('channels.title')" :description="t('channels.subtitle')">
     <div v-if="loading" class="channel-grid">
       <SkeletonCard v-for="i in 6" :key="i" height="180px" />
     </div>

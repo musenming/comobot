@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { NForm, NFormItem, NInput, NButton, NSelect, NSpace, NDynamicTags, useMessage } from 'naive-ui'
 import SecretInput from '../components/SecretInput.vue'
 import api, { restartGateway } from '../api/client'
+import { useI18n } from '../composables/useI18n'
 
 interface FieldDef {
   key: string
@@ -30,6 +31,7 @@ interface ChannelOption {
 
 const router = useRouter()
 const message = useMessage()
+const { t } = useI18n()
 const currentStep = ref(1)
 const loading = ref(false)
 const validating = ref(false)
@@ -113,10 +115,10 @@ const currentChannel = computed(() =>
 const providerFields = computed(() => currentProvider.value?.fields || [])
 const channelFields = computed(() => currentChannel.value?.fields || [])
 
-const languageOptions = [
-  { label: 'Chinese (Simplified)', value: 'zh' },
-  { label: 'English', value: 'en' },
-]
+const languageOptions = computed(() => [
+  { label: t('setup.chinese'), value: 'zh' },
+  { label: t('setup.english'), value: 'en' },
+])
 
 const passwordStrength = computed(() => {
   const p = form.value.admin_password
@@ -130,30 +132,30 @@ const passwordStrength = computed(() => {
 })
 
 const strengthLabel = computed(() => {
-  return ['', 'Weak', 'Fair', 'Good', 'Strong'][passwordStrength.value] || ''
+  return ['', t('setup.weak'), t('setup.fair'), t('setup.good'), t('setup.strong')][passwordStrength.value] || ''
 })
 
 const strengthColor = computed(() => {
   return ['', 'var(--accent-red)', 'var(--accent-yellow)', 'var(--accent-blue)', 'var(--accent-green)'][passwordStrength.value] || ''
 })
 
-const steps = [
-  { num: 1, label: 'Admin' },
-  { num: 2, label: 'LLM' },
-  { num: 3, label: 'Channel' },
-  { num: 4, label: 'Done' },
-]
+const steps = computed(() => [
+  { num: 1, label: t('setup.admin') },
+  { num: 2, label: t('setup.llm') },
+  { num: 3, label: t('setup.channel') },
+  { num: 4, label: t('setup.done') },
+])
 
 const accessUrl = computed(() => `http://localhost:${window.location.port || 18790}`)
 
 function nextStep() {
   if (currentStep.value === 1) {
     if (form.value.admin_password.length < 8) {
-      message.warning('Password must be at least 8 characters')
+      message.warning(t('setup.passwordMin8'))
       return
     }
     if (form.value.admin_password !== form.value.admin_password_confirm) {
-      message.warning('Passwords do not match')
+      message.warning(t('setup.passwordMismatch'))
       return
     }
   }
@@ -163,7 +165,7 @@ function nextStep() {
       if (field.type === 'tags') {
         const val = form.value.channel_config[field.key]
         if (!Array.isArray(val) || val.length === 0) {
-          message.warning(`${field.label} cannot be empty`)
+          message.warning(t('setup.fieldRequired', { field: field.label }))
           return
         }
       }
@@ -236,11 +238,11 @@ async function finishSetup() {
       assistant_name: form.value.assistant_name || undefined,
       language: form.value.language || undefined,
     })
-    message.success('Setup complete! Restarting gateway...')
+    message.success(t('setup.setupComplete'))
     await restartGateway()
     router.push('/login')
   } catch (e: any) {
-    message.error(e.response?.data?.detail || 'Setup failed')
+    message.error(e.response?.data?.detail || t('setup.setupFailed'))
   } finally {
     loading.value = false
   }
@@ -275,8 +277,8 @@ async function finishSetup() {
       <!-- Step 1: Password -->
       <Transition name="slide" mode="out-in">
         <NForm v-if="currentStep === 1" key="step1">
-          <NFormItem label="Admin Password">
-            <NInput v-model:value="form.admin_password" type="password" show-password-on="click" placeholder="At least 8 characters" size="large" />
+          <NFormItem :label="t('setup.adminPassword')">
+            <NInput v-model:value="form.admin_password" type="password" show-password-on="click" :placeholder="t('setup.atLeast8Chars')" size="large" />
           </NFormItem>
           <div v-if="form.admin_password" class="strength-bar">
             <div class="strength-track">
@@ -287,29 +289,29 @@ async function finishSetup() {
             </div>
             <span class="strength-label" :style="{ color: strengthColor }">{{ strengthLabel }}</span>
           </div>
-          <NFormItem label="Confirm Password">
-            <NInput v-model:value="form.admin_password_confirm" type="password" show-password-on="click" placeholder="Confirm" size="large" />
+          <NFormItem :label="t('setup.confirmPassword')">
+            <NInput v-model:value="form.admin_password_confirm" type="password" show-password-on="click" :placeholder="t('common.confirm')" size="large" />
           </NFormItem>
           <NSpace justify="end">
-            <NButton type="primary" size="large" @click="nextStep">Next</NButton>
+            <NButton type="primary" size="large" @click="nextStep">{{ t('common.next') }}</NButton>
           </NSpace>
         </NForm>
 
         <!-- Step 2: Provider -->
         <NForm v-else-if="currentStep === 2" key="step2">
-          <NFormItem label="AI Provider">
+          <NFormItem :label="t('setup.aiProvider')">
             <NSelect
               v-model:value="form.provider"
               :options="providerSelectOptions"
-              placeholder="Select AI Provider"
+              :placeholder="t('setup.selectAiProvider')"
               clearable
               size="large"
               @update:value="onProviderChange"
             />
           </NFormItem>
           <div v-if="currentProvider?.recommended" class="provider-tip">
-            <span class="tip-badge">⭐ Recommended</span>
-            OpenRouter supports almost all mainstream models, ideal for beginners
+            <span class="tip-badge">⭐ {{ t('setup.recommended') }}</span>
+            {{ t('setup.openRouterDesc') }}
           </div>
 
           <!-- Dynamic provider fields -->
@@ -333,7 +335,7 @@ async function finishSetup() {
                   style="margin-left: 8px; flex-shrink: 0"
                   @click="validateKey"
                 >
-                  Verify
+                  {{ t('setup.verify') }}
                 </NButton>
               </div>
               <NInput
@@ -345,10 +347,10 @@ async function finishSetup() {
               />
             </NFormItem>
 
-            <NFormItem label="Model">
+            <NFormItem :label="t('setup.model')">
               <NInput
                 v-model:value="form.model"
-                placeholder="e.g. anthropic/claude-sonnet-4-5-20250514"
+                :placeholder="t('setup.modelPlaceholder')"
                 size="large"
               />
             </NFormItem>
@@ -359,18 +361,18 @@ async function finishSetup() {
             <span v-else>❌ {{ validateMessage }}</span>
           </div>
           <NSpace justify="space-between" style="margin-top: 16px">
-            <NButton size="large" @click="prevStep">Back</NButton>
-            <NButton type="primary" size="large" @click="nextStep">Next</NButton>
+            <NButton size="large" @click="prevStep">{{ t('common.back') }}</NButton>
+            <NButton type="primary" size="large" @click="nextStep">{{ t('common.next') }}</NButton>
           </NSpace>
         </NForm>
 
         <!-- Step 3: Channel (Generic) -->
         <NForm v-else-if="currentStep === 3" key="step3">
-          <NFormItem label="Chat Channel (Optional)">
+          <NFormItem :label="t('setup.chatChannel')">
             <NSelect
               v-model:value="form.channel_type"
               :options="channelSelectOptions"
-              placeholder="Select chat channel"
+              :placeholder="t('setup.selectChatChannel')"
               clearable
               size="large"
               @update:value="onChannelChange"
@@ -411,27 +413,27 @@ async function finishSetup() {
           </template>
 
           <NSpace justify="space-between">
-            <NButton size="large" @click="prevStep">Back</NButton>
-            <NButton type="primary" size="large" @click="nextStep">Next</NButton>
+            <NButton size="large" @click="prevStep">{{ t('common.back') }}</NButton>
+            <NButton type="primary" size="large" @click="nextStep">{{ t('common.next') }}</NButton>
           </NSpace>
         </NForm>
 
         <!-- Step 4: Complete -->
         <NForm v-else key="step4">
-          <NFormItem label="Assistant Name">
+          <NFormItem :label="t('setup.assistantName')">
             <NInput v-model:value="form.assistant_name" placeholder="Comobot" size="large" />
           </NFormItem>
-          <NFormItem label="Language">
+          <NFormItem :label="t('setup.language')">
             <NSelect v-model:value="form.language" :options="languageOptions" size="large" />
           </NFormItem>
           <div class="access-url">
-            <span class="url-label">Access after setup:</span>
+            <span class="url-label">{{ t('setup.accessAfterSetup') }}</span>
             <span class="url-value">{{ accessUrl }}</span>
           </div>
           <NSpace justify="space-between" style="margin-top: 24px">
-            <NButton size="large" @click="prevStep">Back</NButton>
+            <NButton size="large" @click="prevStep">{{ t('common.back') }}</NButton>
             <NButton type="primary" size="large" :loading="loading" @click="finishSetup">
-              Get Started
+              {{ t('setup.getStarted') }}
             </NButton>
           </NSpace>
         </NForm>

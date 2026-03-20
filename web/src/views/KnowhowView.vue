@@ -6,6 +6,9 @@ import PageLayout from '../components/PageLayout.vue'
 import MarkdownRenderer from '../components/MarkdownRenderer.vue'
 import EmptyState from '../components/EmptyState.vue'
 import api from '../api/client'
+import { useI18n } from '../composables/useI18n'
+
+const { t } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
@@ -116,7 +119,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <PageLayout title="Know-how" description="Manage experience and procedural knowledge">
+  <PageLayout :title="t('knowhow.title')" :description="t('knowhow.subtitle')">
     <div class="knowhow-layout">
       <!-- Left panel: search + list -->
       <div class="knowhow-sidebar">
@@ -124,13 +127,13 @@ onMounted(async () => {
           <n-input
             v-model:value="search"
             size="small"
-            placeholder="Search Know-how..."
+            :placeholder="t('knowhow.searchPlaceholder')"
             clearable
           />
         </div>
-        <div v-if="listLoading" class="sidebar-loading">Loading...</div>
+        <div v-if="listLoading" class="sidebar-loading">{{ t('common.loading') }}</div>
         <div v-else-if="filtered.length === 0" class="sidebar-empty">
-          {{ search ? 'No matches' : 'No Know-how yet' }}
+          {{ search ? t('knowhow.noMatches') : t('knowhow.noKnowhowYet') }}
         </div>
         <div v-else class="knowhow-list">
           <div
@@ -161,25 +164,25 @@ onMounted(async () => {
 
       <!-- Right panel: detail -->
       <div class="knowhow-detail">
-        <div v-if="detailLoading" style="padding: 20px; color: var(--text-muted)">Loading...</div>
+        <div v-if="detailLoading" style="padding: 20px; color: var(--text-muted)">{{ t('common.loading') }}</div>
         <template v-else-if="item">
           <!-- Detail header -->
           <div class="detail-header">
             <div v-if="editing" class="edit-header">
               <n-input v-model:value="editTitle" size="small" style="flex: 1" />
-              <n-button size="small" type="primary" @click="save">Save</n-button>
-              <n-button size="small" @click="editing = false">Cancel</n-button>
+              <n-button size="small" type="primary" @click="save">{{ t('common.save') }}</n-button>
+              <n-button size="small" @click="editing = false">{{ t('common.cancel') }}</n-button>
             </div>
             <div v-else class="view-header">
               <h3 class="detail-title">{{ item.title }}</h3>
               <n-space>
-                <n-button size="small" quaternary @click="editing = true">Edit</n-button>
-                <n-button size="small" quaternary @click="archive">Archive</n-button>
+                <n-button size="small" quaternary @click="editing = true">{{ t('common.edit') }}</n-button>
+                <n-button size="small" quaternary @click="archive">{{ t('knowhow.archive') }}</n-button>
                 <n-popconfirm @positive-click="remove">
                   <template #trigger>
-                    <n-button size="small" quaternary type="error">Delete</n-button>
+                    <n-button size="small" quaternary type="error">{{ t('common.delete') }}</n-button>
                   </template>
-                  Permanently delete this Know-how?
+                  {{ t('knowhow.permanentlyDelete') }}
                 </n-popconfirm>
               </n-space>
             </div>
@@ -188,25 +191,25 @@ onMounted(async () => {
           <!-- Detail meta -->
           <div class="kh-detail-meta">
             <div class="meta-row">
-              <span class="meta-label">ID:</span>
+              <span class="meta-label">{{ t('knowhow.id') }}</span>
               <code>{{ item.id }}</code>
             </div>
             <div class="meta-row">
-              <span class="meta-label">Status:</span>
+              <span class="meta-label">{{ t('knowhow.statusLabel') }}</span>
               <n-tag :type="item.status === 'active' ? 'success' : 'default'" size="small">
                 {{ item.status }}
               </n-tag>
             </div>
             <div class="meta-row">
-              <span class="meta-label">Source:</span>
+              <span class="meta-label">{{ t('knowhow.source') }}</span>
               <code>{{ item.source_session || '-' }}</code>
             </div>
             <div class="meta-row">
-              <span class="meta-label">Usage:</span>
-              <span>{{ item.usage_count || 0 }} times</span>
+              <span class="meta-label">{{ t('knowhow.usage') }}</span>
+              <span>{{ item.usage_count || 0 }} {{ t('knowhow.times') }}</span>
             </div>
             <div class="meta-row">
-              <span class="meta-label">Tags:</span>
+              <span class="meta-label">{{ t('knowhow.tags') }}</span>
               <div v-if="editing">
                 <n-dynamic-tags v-model:value="editTags" />
               </div>
@@ -217,7 +220,7 @@ onMounted(async () => {
               </div>
             </div>
             <div class="meta-row">
-              <span class="meta-label">Created:</span>
+              <span class="meta-label">{{ t('knowhow.created') }}</span>
               <span>{{ item.created_at }}</span>
             </div>
           </div>
@@ -227,7 +230,7 @@ onMounted(async () => {
             <MarkdownRenderer :content="item.content" />
           </div>
         </template>
-        <EmptyState v-else title="Select a Know-how" description="Choose an item from the list to view details." />
+        <EmptyState v-else :title="t('knowhow.selectKnowhow')" :description="t('knowhow.selectKnowhowDesc')" />
       </div>
     </div>
   </PageLayout>

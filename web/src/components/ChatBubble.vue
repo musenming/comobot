@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import MarkdownRenderer from './MarkdownRenderer.vue'
+import { useI18n } from '../composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   role: string
@@ -17,7 +20,7 @@ const toolExpanded = ref(false)
     <div class="bubble" :class="{ user: role === 'user', assistant: role === 'assistant', tool: role === 'tool' }">
       <template v-if="role === 'tool'">
         <button class="tool-toggle" @click="toolExpanded = !toolExpanded">
-          {{ toolExpanded ? '▼' : '▶' }} Tool Call
+          {{ toolExpanded ? '▼' : '▶' }} {{ t('chat.toolCall') }}
         </button>
         <pre v-if="toolExpanded" class="tool-content">{{ content }}</pre>
       </template>

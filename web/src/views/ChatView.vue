@@ -2,12 +2,15 @@
 import { ref, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { NInput, NButton, NCheckbox } from 'naive-ui'
 import PageLayout from '../components/PageLayout.vue'
+import { useI18n } from '../composables/useI18n'
 import ChatBubble from '../components/ChatBubble.vue'
 import ChannelTree from '../components/ChannelTree.vue'
 import KnowhowPreview from '../components/KnowhowPreview.vue'
 import { useWebSocket } from '../composables/useWebSocket'
 import { useSessionWS } from '../composables/useSessionWS'
 import api from '../api/client'
+
+const { t } = useI18n()
 
 interface ToolStep {
   name: string
@@ -323,9 +326,9 @@ function handleKeydown(e: KeyboardEvent) {
 </script>
 
 <template>
-  <PageLayout title="Chat">
+  <PageLayout :title="t('chat.title')">
     <template #actions>
-      <div class="history-title">History Sessions</div>
+      <div class="history-title">{{ t('chat.historySessions') }}</div>
     </template>
 
     <div class="chat-layout">
@@ -340,29 +343,29 @@ function handleKeydown(e: KeyboardEvent) {
             size="small"
             @click="selecting = true"
           >
-            Extract Know-how
+            {{ t('chat.extractKnowhow') }}
           </n-button>
           <template v-if="selecting">
-            <span class="select-count">{{ selectedMsgIds.size }} selected</span>
+            <span class="select-count">{{ selectedMsgIds.size }} {{ t('common.selected') }}</span>
             <n-button
               v-if="selectedMsgIds.size >= 2"
               size="small"
               type="primary"
               @click="startExtract"
             >
-              Save as Know-how
+              {{ t('chat.saveAsKnowhow') }}
             </n-button>
             <n-button size="small" @click="selecting = false; selectedMsgIds.clear()">
-              Cancel
+              {{ t('common.cancel') }}
             </n-button>
           </template>
         </div>
 
         <div ref="messagesEl" class="chat-messages" @scroll="onMessagesScroll">
-          <div v-if="loadingMore" class="loading-more">Loading earlier messages...</div>
+          <div v-if="loadingMore" class="loading-more">{{ t('chat.loadingEarlier') }}</div>
           <div v-if="chatMessages.length === 0 && !thinking" class="chat-empty">
             <span class="empty-icon">&#9651;</span>
-            <p>Start a conversation with ComoBot</p>
+            <p>{{ t('chat.startConversation') }}</p>
           </div>
 
           <template v-for="(msg, i) in chatMessages" :key="i">
@@ -370,9 +373,9 @@ function handleKeydown(e: KeyboardEvent) {
             <div v-if="msg.toolSteps && msg.toolSteps.length > 0" class="workflow-block">
               <button class="workflow-header" @click="toggleWorkflow(i)">
                 <span class="workflow-chevron">{{ workflowCollapsed[i] ? '\u25B6' : '\u25BC' }}</span>
-                <span class="workflow-label">Workflow</span>
-                <span class="workflow-count">{{ msg.toolSteps.length }} steps</span>
-                <span class="workflow-badge done">Completed</span>
+                <span class="workflow-label">{{ t('chat.workflow') }}</span>
+                <span class="workflow-count">{{ msg.toolSteps.length }} {{ t('chat.steps') }}</span>
+                <span class="workflow-badge done">{{ t('chat.completed') }}</span>
               </button>
               <div v-if="!workflowCollapsed[i]" class="workflow-steps">
                 <div
@@ -413,8 +416,8 @@ function handleKeydown(e: KeyboardEvent) {
           <div v-if="thinking && activeToolSteps.length > 0" class="workflow-block active">
             <div class="workflow-header">
               <span class="workflow-chevron">&or;</span>
-              <span class="workflow-label">Working...</span>
-              <span class="workflow-count">{{ activeToolSteps.length }} steps</span>
+              <span class="workflow-label">{{ t('chat.working') }}</span>
+              <span class="workflow-count">{{ activeToolSteps.length }} {{ t('chat.steps') }}</span>
             </div>
             <div class="workflow-steps">
               <div
@@ -441,14 +444,14 @@ function handleKeydown(e: KeyboardEvent) {
 
         <div class="chat-input-area">
           <div class="connection-status" :class="{ online: connected }">
-            {{ connected ? 'Connected' : 'Disconnected' }}
+            {{ connected ? t('common.connected') : t('common.disconnected') }}
           </div>
           <div class="input-row">
             <NInput
               v-model:value="input"
               type="textarea"
               :autosize="{ minRows: 1, maxRows: 4 }"
-              placeholder="Type a message..."
+              :placeholder="t('chat.typeMessage')"
               :disabled="!connected"
               :input-props="({ autocomplete: 'off', name: 'chat-message', 'data-form-type': 'other' } as any)"
               @keydown="handleKeydown"
@@ -459,7 +462,7 @@ function handleKeydown(e: KeyboardEvent) {
               :disabled="!input.trim() || !connected"
               @click="sendMessage"
             >
-              Send
+              {{ t('common.send') }}
             </NButton>
           </div>
         </div>

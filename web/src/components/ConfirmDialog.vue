@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { NModal, NInput, NButton, NSpace } from 'naive-ui'
+import { useI18n } from '../composables/useI18n'
 
 const props = defineProps<{
   show: boolean
@@ -15,6 +16,7 @@ const emit = defineEmits<{
   (e: 'confirm'): void
 }>()
 
+const { t } = useI18n()
 const input = ref('')
 const word = computed(() => props.confirmWord || 'DELETE')
 const canConfirm = computed(() => !props.danger || input.value === word.value)
@@ -37,14 +39,14 @@ function handleCancel() {
   <NModal :show="show" preset="card" :title="title" style="width: 420px;" @update:show="(v: boolean) => emit('update:show', v)">
     <p v-if="description" class="confirm-desc">{{ description }}</p>
     <div v-if="danger" class="confirm-input">
-      <p class="confirm-hint">Type <strong>{{ word }}</strong> to confirm:</p>
+      <p class="confirm-hint">{{ t('confirmDialog.typeToConfirm') }} <strong>{{ word }}</strong> {{ t('confirmDialog.toConfirm') }}</p>
       <NInput v-model:value="input" :placeholder="word" @keyup.enter="handleConfirm" />
     </div>
     <template #footer>
       <NSpace justify="end">
-        <NButton @click="handleCancel">Cancel</NButton>
+        <NButton @click="handleCancel">{{ t('common.cancel') }}</NButton>
         <NButton :type="danger ? 'error' : 'primary'" :disabled="!canConfirm" @click="handleConfirm">
-          Confirm
+          {{ t('common.confirm') }}
         </NButton>
       </NSpace>
     </template>

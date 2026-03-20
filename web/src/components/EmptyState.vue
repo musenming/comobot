@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { useI18n } from '../composables/useI18n'
+
+const { t } = useI18n()
+
 defineProps<{
   icon?: string
   title?: string
@@ -9,7 +13,7 @@ defineProps<{
 <template>
   <div class="empty-state">
     <div class="empty-icon" aria-hidden="true">{{ icon || '📭' }}</div>
-    <div class="empty-title">{{ title || 'No data' }}</div>
+    <div class="empty-title">{{ title || t('common.noData') }}</div>
     <div v-if="description" class="empty-desc">{{ description }}</div>
     <div v-if="$slots.default" class="empty-action">
       <slot />

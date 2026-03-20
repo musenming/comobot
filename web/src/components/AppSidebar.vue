@@ -5,6 +5,8 @@ import { NTooltip } from 'naive-ui'
 import { useBreakpoints } from '@vueuse/core'
 import { useAuthStore } from '../stores/auth'
 import { useThemeStore } from '../stores/theme'
+import { useLocaleStore } from '../stores/locale'
+import { useI18n } from '../composables/useI18n'
 import StatusBadge from './StatusBadge.vue'
 
 const props = defineProps<{
@@ -15,6 +17,8 @@ const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const themeStore = useThemeStore()
+const localeStore = useLocaleStore()
+const { t } = useI18n()
 
 const breakpoints = useBreakpoints({ md: 768, lg: 1024 })
 const isTablet = breakpoints.between('md', 'lg')
@@ -29,22 +33,22 @@ const sidebarCollapsed = computed(() => {
   return collapsed.value
 })
 
-const menuItems = [
-  { key: '/chat', label: 'Chat', icon: '◬' },
-  { key: '/workflows', label: 'Creflow', icon: '⚡' },
-  { key: '/knowhow', label: 'Knowhow', icon: '◎' },
-  { key: '/skills', label: 'Skills', icon: '◇' },
-  { key: '/cron', label: 'Cron Jobs', icon: '◷' },
+const menuItems = computed(() => [
+  { key: '/chat', label: t('sidebar.chat'), icon: '◬' },
+  { key: '/workflows', label: t('sidebar.creflow'), icon: '⚡' },
+  { key: '/knowhow', label: t('sidebar.knowhow'), icon: '◎' },
+  { key: '/skills', label: t('sidebar.skills'), icon: '◇' },
+  { key: '/cron', label: t('sidebar.cronJobs'), icon: '◷' },
 
-  { key: '/memory', label: 'Memory', icon: '◐' },
+  { key: '/memory', label: t('sidebar.memory'), icon: '◐' },
 
   { key: 'divider' },
-  { key: '/', label: 'Dashboard', icon: '◈' },
-  { key: '/channels', label: 'Channels', icon: '◉' },
-  { key: '/providers', label: 'Providers', icon: '◆' },
-  { key: '/logs', label: 'Logs', icon: '▤' },
-  { key: '/settings', label: 'Settings', icon: '⚙' },
-]
+  { key: '/', label: t('sidebar.dashboard'), icon: '◈' },
+  { key: '/channels', label: t('sidebar.channels'), icon: '◉' },
+  { key: '/providers', label: t('sidebar.providers'), icon: '◆' },
+  { key: '/logs', label: t('sidebar.logs'), icon: '▤' },
+  { key: '/settings', label: t('sidebar.settings'), icon: '⚙' },
+])
 
 function isActive(key: string) {
   if (key === '/') return route.path === '/'
@@ -134,19 +138,27 @@ function toggleCollapse() {
         <div class="sidebar-actions">
           <NTooltip :disabled="!sidebarCollapsed || isMobile" placement="right">
             <template #trigger>
-              <button class="action-btn" @click="themeStore.toggle()" :aria-label="themeStore.isDark ? 'Switch to light mode' : 'Switch to dark mode'">
-                {{ themeStore.isDark ? '☀' : '☾' }}
+              <button class="action-btn" @click="localeStore.toggle()" :aria-label="t('sidebar.language')">
+                {{ localeStore.locale === 'en' ? '中' : 'En' }}
               </button>
             </template>
-            {{ themeStore.isDark ? 'Light mode' : 'Dark mode' }}
+            {{ t('sidebar.language') }}
           </NTooltip>
           <NTooltip :disabled="!sidebarCollapsed || isMobile" placement="right">
             <template #trigger>
-              <button class="action-btn logout-btn" @click="handleLogout" aria-label="Logout">
+              <button class="action-btn" @click="themeStore.toggle()" :aria-label="themeStore.isDark ? t('sidebar.switchToLight') : t('sidebar.switchToDark')">
+                {{ themeStore.isDark ? '☀' : '☾' }}
+              </button>
+            </template>
+            {{ themeStore.isDark ? t('sidebar.lightMode') : t('sidebar.darkMode') }}
+          </NTooltip>
+          <NTooltip :disabled="!sidebarCollapsed || isMobile" placement="right">
+            <template #trigger>
+              <button class="action-btn logout-btn" @click="handleLogout" :aria-label="t('sidebar.logout')">
                 ⏻
               </button>
             </template>
-            Logout
+            {{ t('sidebar.logout') }}
           </NTooltip>
         </div>
       </div>

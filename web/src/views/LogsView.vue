@@ -4,7 +4,10 @@ import { NInput, NSelect } from 'naive-ui'
 import PageLayout from '../components/PageLayout.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import { useWebSocket } from '../composables/useWebSocket'
+import { useI18n } from '../composables/useI18n'
 import api from '../api/client'
+
+const { t } = useI18n()
 
 const { connected, messages: wsMessages } = useWebSocket('/ws/logs')
 
@@ -15,12 +18,12 @@ const levelFilter = ref<string>('')
 const autoScroll = ref(true)
 const logContainer = ref<HTMLDivElement>()
 
-const levelOptions = [
-  { label: 'All', value: '' },
-  { label: 'Info', value: 'info' },
-  { label: 'Warn', value: 'warn' },
-  { label: 'Error', value: 'error' },
-]
+const levelOptions = computed(() => [
+  { label: t('logs.all'), value: '' },
+  { label: t('logs.info'), value: 'info' },
+  { label: t('logs.warn'), value: 'warn' },
+  { label: t('common.error'), value: 'error' },
+])
 
 const filteredLogs = computed(() => {
   let result = logs.value
@@ -87,7 +90,7 @@ function toggleExpand(idx: number) {
 </script>
 
 <template>
-  <PageLayout title="Logs" description="Real-time system audit log">
+  <PageLayout :title="t('logs.title')" :description="t('logs.subtitle')">
     <template #actions>
       <StatusBadge :status="connected ? 'online' : 'offline'" />
     </template>
@@ -97,7 +100,7 @@ function toggleExpand(idx: number) {
       <NSelect
         :value="levelFilter"
         :options="levelOptions"
-        placeholder="Level"
+        :placeholder="t('logs.level')"
         clearable
         size="small"
         style="width: 120px"
@@ -105,7 +108,7 @@ function toggleExpand(idx: number) {
       />
       <NInput
         v-model:value="search"
-        placeholder="Search logs..."
+        :placeholder="t('logs.searchPlaceholder')"
         size="small"
         clearable
         style="max-width: 300px"
@@ -114,8 +117,8 @@ function toggleExpand(idx: number) {
 
     <!-- Log viewer -->
     <div class="log-viewer" ref="logContainer" @scroll="handleScroll">
-      <div v-if="loading" class="log-loading">Loading logs...</div>
-      <div v-else-if="filteredLogs.length === 0" class="log-empty">No logs match your filter</div>
+      <div v-if="loading" class="log-loading">{{ t('logs.loadingLogs') }}</div>
+      <div v-else-if="filteredLogs.length === 0" class="log-empty">{{ t('logs.noLogsMatch') }}</div>
       <div
         v-for="(log, idx) in filteredLogs"
         :key="idx"
@@ -134,7 +137,7 @@ function toggleExpand(idx: number) {
     </div>
 
     <div v-if="!autoScroll" class="scroll-badge" @click="autoScroll = true; logContainer?.scrollTo({ top: logContainer.scrollHeight, behavior: 'smooth' })">
-      ↓ New logs
+      ↓ {{ t('logs.newLogs') }}
     </div>
   </PageLayout>
 </template>

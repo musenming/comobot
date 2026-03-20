@@ -3,6 +3,7 @@ import { ref, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NInput, NButton, NCheckbox } from 'naive-ui'
 import PageLayout from '../components/PageLayout.vue'
+import { useI18n } from '../composables/useI18n'
 import ChatBubble from '../components/ChatBubble.vue'
 import SkeletonCard from '../components/SkeletonCard.vue'
 import EmptyState from '../components/EmptyState.vue'
@@ -11,6 +12,8 @@ import KnowhowSidebar from '../components/KnowhowSidebar.vue'
 import KnowhowPreview from '../components/KnowhowPreview.vue'
 import { useSessionWS } from '../composables/useSessionWS'
 import api from '../api/client'
+
+const { t } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
@@ -190,7 +193,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <PageLayout title="Sessions" description="View and continue conversation history">
+  <PageLayout :title="t('sessions.title')" :description="t('sessions.subtitle')">
     <div class="sessions-layout">
       <!-- Sidebar: Channel Tree + Know-how -->
       <div class="sidebar">
@@ -213,20 +216,20 @@ onUnmounted(() => {
             quaternary
             @click="selecting = true"
           >
-            Extract Know-how
+            {{ t('sessions.extractKnowhow') }}
           </n-button>
           <template v-if="selecting">
-            <span class="select-count">{{ selectedMsgIds.size }} selected</span>
+            <span class="select-count">{{ selectedMsgIds.size }} {{ t('common.selected') }}</span>
             <n-button
               v-if="selectedMsgIds.size >= 2"
               size="small"
               type="primary"
               @click="startExtract"
             >
-              Save as Know-how
+              {{ t('sessions.saveAsKnowhow') }}
             </n-button>
             <n-button size="small" @click="selecting = false; selectedMsgIds.clear()">
-              Cancel
+              {{ t('common.cancel') }}
             </n-button>
           </template>
         </div>
@@ -237,7 +240,7 @@ onUnmounted(() => {
               <SkeletonCard :lines="3" />
             </div>
             <template v-else-if="messages.length === 0">
-              <EmptyState title="No messages" description="This session has no messages." />
+              <EmptyState :title="t('sessions.noMessages')" :description="t('sessions.noMessagesDesc')" />
             </template>
             <div v-else class="message-flow">
               <div
@@ -267,21 +270,21 @@ onUnmounted(() => {
             </div>
           </template>
           <template v-else>
-            <EmptyState title="Select a session" description="Choose a session from the sidebar." />
+            <EmptyState :title="t('sessions.selectSession')" :description="t('sessions.selectSessionDesc')" />
           </template>
         </div>
 
         <!-- Chat Input -->
         <div v-if="selectedKey" class="chat-input-area">
           <div class="connection-status" :class="{ online: wsConnected }">
-            {{ wsConnected ? 'Connected' : 'Disconnected' }}
+            {{ wsConnected ? t('common.connected') : t('common.disconnected') }}
           </div>
           <div class="input-row">
             <NInput
               v-model:value="input"
               type="textarea"
               :autosize="{ minRows: 1, maxRows: 4 }"
-              placeholder="Continue the conversation..."
+              :placeholder="t('sessions.continueConversation')"
               :disabled="!wsConnected"
               @keydown="handleKeydown"
             />
@@ -291,7 +294,7 @@ onUnmounted(() => {
               :disabled="!input.trim() || !wsConnected"
               @click="sendMessage"
             >
-              Send
+              {{ t('common.send') }}
             </NButton>
           </div>
         </div>

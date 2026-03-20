@@ -2,6 +2,9 @@
 import { ref, watch } from 'vue'
 import { NModal, NForm, NFormItem, NInput, NDynamicTags, NButton, NSpin } from 'naive-ui'
 import api from '../api/client'
+import { useI18n } from '../composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   sessionKey: string
@@ -57,34 +60,34 @@ async function save() {
 </script>
 
 <template>
-  <n-modal v-model:show="visible" preset="card" title="Know-how Preview" style="width: 600px; max-width: 90vw">
+  <n-modal v-model:show="visible" preset="card" :title="t('knowhow.preview')" style="width: 600px; max-width: 90vw">
     <n-spin :show="loading">
       <n-form v-if="preview" label-placement="top">
-        <n-form-item label="Title">
+        <n-form-item :label="t('knowhow.titleField')">
           <n-input v-model:value="preview.title" />
         </n-form-item>
-        <n-form-item label="Goal">
+        <n-form-item :label="t('knowhow.goal')">
           <n-input v-model:value="preview.goal" type="textarea" :rows="2" />
         </n-form-item>
-        <n-form-item label="Key Steps">
+        <n-form-item :label="t('knowhow.keySteps')">
           <ol class="steps-list">
             <li v-for="(step, i) in preview.steps" :key="i">{{ step }}</li>
           </ol>
         </n-form-item>
-        <n-form-item v-if="preview.outcome" label="Outcome">
+        <n-form-item v-if="preview.outcome" :label="t('knowhow.outcome')">
           <span>{{ preview.outcome }}</span>
         </n-form-item>
-        <n-form-item label="Tags">
+        <n-form-item :label="t('knowhow.tags')">
           <n-dynamic-tags v-model:value="preview.tags" />
         </n-form-item>
       </n-form>
       <div v-else-if="!loading" style="padding: 20px; text-align: center; color: var(--text-muted)">
-        No preview available
+        {{ t('knowhow.noPreview') }}
       </div>
     </n-spin>
     <template #action>
       <n-button type="primary" :loading="saving" :disabled="!preview" @click="save">
-        Confirm Save
+        {{ t('knowhow.confirmSave') }}
       </n-button>
     </template>
   </n-modal>

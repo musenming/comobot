@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useI18n } from '../composables/useI18n'
+
+const { t } = useI18n()
+
 defineProps<{
   status: 'online' | 'offline' | 'error' | 'paused'
 }>()
@@ -10,12 +15,12 @@ const colorMap: Record<string, string> = {
   paused: 'var(--accent-yellow)',
 }
 
-const labelMap: Record<string, string> = {
-  online: 'Online',
-  offline: 'Offline',
-  error: 'Error',
-  paused: 'Paused',
-}
+const labelMap = computed(() => ({
+  online: t('common.online'),
+  offline: t('common.offline'),
+  error: t('common.error'),
+  paused: t('common.paused'),
+}))
 </script>
 
 <template>
@@ -27,6 +32,7 @@ const labelMap: Record<string, string> = {
       aria-hidden="true"
     />
     <span class="status-text">{{ labelMap[status] }}</span>
+
   </span>
 </template>
 

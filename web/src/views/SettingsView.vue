@@ -6,7 +6,10 @@ import 'md-editor-v3/lib/style.css'
 import PageLayout from '../components/PageLayout.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { useThemeStore } from '../stores/theme'
+import { useI18n } from '../composables/useI18n'
 import api, { restartGateway } from '../api/client'
+
+const { t } = useI18n()
 
 const message = useMessage()
 const themeStore = useThemeStore()
@@ -40,19 +43,19 @@ const showNoGpuConfirm = ref(false)
 
 const statusLabel = computed(() => {
   switch (qmdStatus.value?.state) {
-    case 'running': return 'Running'
-    case 'stopped': return 'Stopped'
-    case 'starting': return 'Initializing (first-time setup may take a few minutes)...'
-    case 'error': return 'Failed'
-    default: return 'Unknown'
+    case 'running': return t('settings.running')
+    case 'stopped': return t('settings.stopped')
+    case 'starting': return t('settings.initializing')
+    case 'error': return t('settings.failed')
+    default: return t('settings.unknown')
   }
 })
 
-const themeOptions = [
-  { label: 'Dark', value: 'dark' },
-  { label: 'Light', value: 'light' },
-  { label: 'System', value: 'system' },
-]
+const themeOptions = computed(() => [
+  { label: t('settings.dark'), value: 'dark' },
+  { label: t('settings.light'), value: 'light' },
+  { label: t('settings.system'), value: 'system' },
+])
 
 const agentFileOptions = [
   { label: 'SOUL.md', value: 'SOUL.md' },
@@ -85,20 +88,20 @@ onMounted(async () => {
 
 async function savePassword() {
   if (passwordForm.value.new_password.length < 8) {
-    message.warning('Password must be at least 8 characters')
+    message.warning(t('setup.passwordMin8'))
     return
   }
   if (passwordForm.value.new_password !== passwordForm.value.confirm_password) {
-    message.warning('Passwords do not match')
+    message.warning(t('setup.passwordMismatch'))
     return
   }
   savingPassword.value = true
   try {
     await api.put('/settings/password', { new_password: passwordForm.value.new_password })
-    message.success('Password updated')
+    message.success(t('setup.passwordUpdated'))
     passwordForm.value = { new_password: '', confirm_password: '' }
   } catch (e: any) {
-    message.error(e.response?.data?.detail || 'Failed to update password')
+    message.error(e.response?.data?.detail || t('setup.passwordUpdateFailed'))
   } finally {
     savingPassword.value = false
   }
@@ -115,10 +118,10 @@ async function saveAgentFile() {
   if (!endpoint) return
   try {
     await api.put(endpoint, { content: currentContent.value })
-    message.success(`${activeAgentFile.value} saved, restarting gateway...`)
+    message.success(`${activeAgentFile.value} saved`)
     restartGateway()
   } catch {
-    message.error('Failed to save')
+    message.error(t('channels.failedSave'))
   } finally {
     savingAgent.value = false
   }
@@ -173,13 +176,13 @@ async function doToggleQMD(value: boolean) {
       qmdEnabled.value = value
       if (data.state === 'starting') {
         // Background initialization — poll for completion
-        message.info('QMD is initializing (first run may take a few minutes)...')
+        message.info(t('settings.qmdInitializing'))
         pollQMDUntilReady()
       } else {
         if (qmdStatus.value) {
           qmdStatus.value = { ...qmdStatus.value, state: data.state || 'stopped' }
         }
-        message.success(value ? 'QMD enabled' : 'QMD disabled')
+        message.success(value ? t('settings.qmdEnabled') : t('settings.qmdDisabled'))
         qmdLoading.value = false
       }
     } else {
@@ -210,7 +213,7 @@ async function pollQMDUntilReady(maxWait = 600000) {
       qmdStatus.value = data.status
       qmdEnabled.value = data.enabled
       if (data.status.state === 'running') {
-        message.success('QMD enabled successfully')
+        message.success(t('settings.qmdEnabled'))
         qmdLoading.value = false
         return
       }
@@ -229,7 +232,7 @@ async function pollQMDUntilReady(maxWait = 600000) {
       // Network error, keep polling
     }
   }
-  message.warning('QMD initialization timed out — check server logs')
+  message.warning(t('settings.qmdTimeout'))
   qmdLoading.value = false
 }
 
@@ -237,9 +240,9 @@ async function reindexQMD() {
   reindexing.value = true
   try {
     await api.post('/settings/qmd/reindex')
-    message.success('Reindex triggered')
+    message.success(t('common.reindex') + ' triggered')
   } catch {
-    message.error('Reindex failed')
+    message.error(t('common.reindex') + ' failed')
   } finally {
     reindexing.value = false
   }
@@ -247,12 +250,12 @@ async function reindexQMD() {
 </script>
 
 <template>
-  <PageLayout title="Settings" description="System configuration">
+  <PageLayout :title="t('settings.title')" :description="t('settings.subtitle')">
     <NTabs type="line" animated>
       <!-- General -->
-      <NTabPane name="general" tab="General">
+      <NTabPane name="general" :tab="t('settings.general')">
         <div class="settings-section">
-          <h3 class="section-title">Theme</h3>
+          <h3 class="section-title">{{ t('settings.theme') }}</h3>
           <NSelect
             :value="themeStore.userPref"
             :options="themeOptions"
@@ -262,14 +265,14 @@ async function reindexQMD() {
         </div>
 
         <div class="settings-section">
-          <p class="section-note">Model and provider defaults have been moved to the <strong>Providers</strong> page.</p>
+          <p class="section-note">{{ t('settings.defaultsMoved') }}</p>
         </div>
 
         <div class="settings-section">
-          <h3 class="section-title">Memory Search</h3>
+          <h3 class="section-title">{{ t('settings.memorySearch') }}</h3>
           <div class="qmd-toggle-row">
             <div class="qmd-label">
-              <span>QMD Smart Search Engine</span>
+              <span>{{ t('settings.qmdTitle') }}</span>
               <NSwitch
                 :value="qmdEnabled"
                 :loading="qmdLoading"
@@ -277,18 +280,11 @@ async function reindexQMD() {
                 @update:value="toggleQMD"
               />
             </div>
-            <p class="section-note">
-              When enabled, memory search uses a local AI model for semantic matching
-              with synonym understanding and contextual search. Requires ~1.2GB extra
-              memory (low-memory devices auto-switch to on-demand mode).
-              First-time setup will automatically download and install the required
-              components (~80MB total), which may take 1-2 minutes.
-              Disabling falls back to keyword search without restart.
-            </p>
+            <p class="section-note">{{ t('settings.qmdDescription') }}</p>
           </div>
           <div class="qmd-status-row" v-if="!qmdGpu.available && !qmdEnabled">
             <span class="status-dot warning"></span>
-            <span class="status-text">No GPU detected — CPU mode will be slower</span>
+            <span class="status-text">{{ t('settings.noGpuWarning') }}</span>
           </div>
           <div class="qmd-status-row" v-if="qmdStatus">
             <span :class="['status-dot', qmdStatus.state]"></span>
@@ -300,14 +296,14 @@ async function reindexQMD() {
               @click="reindexQMD"
               :loading="reindexing"
             >
-              Reindex
+              {{ t('common.reindex') }}
             </NButton>
           </div>
         </div>
       </NTabPane>
 
       <!-- Agent -->
-      <NTabPane name="agent" tab="Agent">
+      <NTabPane name="agent" :tab="t('settings.agent')">
         <div class="agent-editor">
           <!-- File selector bar -->
           <div class="editor-toolbar">
@@ -329,7 +325,7 @@ async function reindexQMD() {
                 :loading="savingAgent"
                 @click="saveAgentFile"
               >
-                Save
+                {{ t('common.save') }}
               </NButton>
             </NSpace>
           </div>
@@ -350,10 +346,10 @@ async function reindexQMD() {
         </div>
 
         <div class="settings-section" style="margin-top: var(--space-6)">
-          <h3 class="section-title">MEMORY.md (Read Only)</h3>
+          <h3 class="section-title">{{ t('settings.memoryReadOnly') }}</h3>
           <div class="memory-viewer">
             <MdPreview
-              :model-value="memoryContent || 'No memories yet.'"
+              :model-value="memoryContent || t('settings.noMemories')"
               :theme="themeStore.isDark ? 'dark' : 'light'"
               preview-theme="github"
             />
@@ -362,15 +358,15 @@ async function reindexQMD() {
       </NTabPane>
 
       <!-- Security -->
-      <NTabPane name="security" tab="Security">
+      <NTabPane name="security" :tab="t('settings.security')">
         <div class="settings-section">
-          <h3 class="section-title">Change Password</h3>
+          <h3 class="section-title">{{ t('settings.changePassword') }}</h3>
           <NForm style="max-width: 400px">
-            <NFormItem label="New Password">
-              <NInput v-model:value="passwordForm.new_password" type="password" show-password-on="click" placeholder="At least 8 characters" />
+            <NFormItem :label="t('settings.newPassword')">
+              <NInput v-model:value="passwordForm.new_password" type="password" show-password-on="click" :placeholder="t('settings.atLeast8Chars')" />
             </NFormItem>
-            <NFormItem label="Confirm Password">
-              <NInput v-model:value="passwordForm.confirm_password" type="password" show-password-on="click" placeholder="Confirm" />
+            <NFormItem :label="t('settings.confirmPassword')">
+              <NInput v-model:value="passwordForm.confirm_password" type="password" show-password-on="click" :placeholder="t('common.confirm')" />
             </NFormItem>
             <NButton type="primary" :loading="savingPassword" @click="savePassword">Update Password</NButton>
           </NForm>

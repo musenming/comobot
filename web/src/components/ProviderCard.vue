@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { NButton } from 'naive-ui'
+import { useI18n } from '../composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   provider: {
@@ -34,15 +37,15 @@ const nameMap: Record<string, string> = {
       <div class="provider-icon" aria-hidden="true">◆</div>
       <div class="provider-info">
         <span class="provider-name">{{ nameMap[provider.provider] || provider.provider }}</span>
-        <span class="provider-meta">{{ provider.key_count || 0 }} key(s)</span>
+        <span class="provider-meta">{{ provider.key_count || 0 }} {{ t('providers.keys') }}</span>
       </div>
       <StatusBadge :status="(provider.key_count || 0) > 0 ? 'online' : 'offline'" />
     </div>
 
     <div class="card-actions">
-      <NButton size="small" quaternary @click="emit('edit')">Edit</NButton>
-      <NButton size="small" quaternary @click="emit('test')">Test</NButton>
-      <NButton size="small" quaternary type="error" @click="emit('remove')">Remove</NButton>
+      <NButton size="small" quaternary @click="emit('edit')">{{ t('common.edit') }}</NButton>
+      <NButton size="small" quaternary @click="emit('test')">{{ t('common.test') }}</NButton>
+      <NButton size="small" quaternary type="error" @click="emit('remove')">{{ t('providers.remove') }}</NButton>
     </div>
   </div>
 </template>

@@ -2,6 +2,9 @@
 import { computed } from 'vue'
 import { NInput } from 'naive-ui'
 import cronstrue from 'cronstrue'
+import { useI18n } from '../composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   value: string
@@ -16,7 +19,7 @@ const humanReadable = computed(() => {
   try {
     return cronstrue.toString(props.value)
   } catch {
-    return 'Invalid expression'
+    return t('cron.invalidExpression')
   }
 })
 </script>
@@ -28,7 +31,7 @@ const humanReadable = computed(() => {
       placeholder="0 8 * * *"
       @update:value="(v: string) => emit('update:value', v)"
     />
-    <div v-if="value" class="cron-human" :class="{ invalid: humanReadable === 'Invalid expression' }">
+    <div v-if="value" class="cron-human" :class="{ invalid: humanReadable === t('cron.invalidExpression') }">
       {{ humanReadable }}
     </div>
   </div>

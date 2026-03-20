@@ -8,7 +8,10 @@ import SparklineChart from '../components/SparklineChart.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import SkeletonCard from '../components/SkeletonCard.vue'
 import { useWebSocket } from '../composables/useWebSocket'
+import { useI18n } from '../composables/useI18n'
 import api from '../api/client'
+
+const { t } = useI18n()
 
 const router = useRouter()
 const loading = ref(true)
@@ -54,26 +57,26 @@ function cronStatus(s: string): 'online' | 'offline' | 'error' | 'paused' {
 </script>
 
 <template>
-  <PageLayout title="Dashboard" description="System overview">
+  <PageLayout :title="t('dashboard.title')" :description="t('dashboard.subtitle')">
     <!-- Stats Grid -->
     <div v-if="loading" class="stats-grid">
       <SkeletonCard v-for="i in 6" :key="i" height="120px" />
     </div>
     <div v-else class="stats-grid">
-      <StatCard icon="💬" label="Sessions" :value="stats.total_sessions" />
-      <StatCard icon="✉" label="Messages" :value="stats.total_messages" />
-      <StatCard icon="⚡" label="Active Workflows" :value="stats.active_workflows" />
-      <StatCard icon="◈" label="Total Workflows" :value="stats.total_workflows" />
-      <StatCard icon="◷" label="Cron Jobs" :value="stats.cron_jobs" />
-      <StatCard icon="⚠" label="Errors (24h)" :value="stats.recent_errors" />
+      <StatCard icon="💬" :label="t('dashboard.sessions')" :value="stats.total_sessions" />
+      <StatCard icon="✉" :label="t('dashboard.messages')" :value="stats.total_messages" />
+      <StatCard icon="⚡" :label="t('dashboard.activeWorkflows')" :value="stats.active_workflows" />
+      <StatCard icon="◈" :label="t('dashboard.totalWorkflows')" :value="stats.total_workflows" />
+      <StatCard icon="◷" :label="t('dashboard.cronJobs')" :value="stats.cron_jobs" />
+      <StatCard icon="⚠" :label="t('dashboard.errors24h')" :value="stats.recent_errors" />
     </div>
 
     <!-- Trend Chart -->
     <div v-if="!loading && stats.message_trend.length > 0" class="trend-section">
       <NCard :bordered="false" class="trend-card">
         <div class="trend-header">
-          <span class="trend-title">Message Trend</span>
-          <span class="trend-subtitle">Last 7 days</span>
+          <span class="trend-title">{{ t('dashboard.messageTrend') }}</span>
+          <span class="trend-subtitle">{{ t('dashboard.last7Days') }}</span>
         </div>
         <SparklineChart :data="stats.message_trend" height="160px" />
       </NCard>
@@ -82,8 +85,8 @@ function cronStatus(s: string): 'online' | 'offline' | 'error' | 'paused' {
     <!-- Status Wall -->
     <div v-if="!loading" class="status-wall">
       <NCard :bordered="false" class="wall-card">
-        <div class="wall-title">Running Workflows</div>
-        <div v-if="stats.running_workflows.length === 0" class="wall-empty">No active workflows</div>
+        <div class="wall-title">{{ t('dashboard.runningWorkflows') }}</div>
+        <div v-if="stats.running_workflows.length === 0" class="wall-empty">{{ t('dashboard.noActiveWorkflows') }}</div>
         <div
           v-for="wf in stats.running_workflows"
           :key="wf.id"
@@ -97,8 +100,8 @@ function cronStatus(s: string): 'online' | 'offline' | 'error' | 'paused' {
       </NCard>
 
       <NCard :bordered="false" class="wall-card">
-        <div class="wall-title">Cron Status</div>
-        <div v-if="stats.cron_warnings.length === 0" class="wall-empty">No cron jobs</div>
+        <div class="wall-title">{{ t('dashboard.cronStatus') }}</div>
+        <div v-if="stats.cron_warnings.length === 0" class="wall-empty">{{ t('dashboard.noCronJobs') }}</div>
         <div
           v-for="cj in stats.cron_warnings"
           :key="cj.id"

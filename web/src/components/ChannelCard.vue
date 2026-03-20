@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { NButton } from 'naive-ui'
 import StatusBadge from './StatusBadge.vue'
+import { useI18n } from '../composables/useI18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   channel: {
@@ -42,13 +45,13 @@ const iconMap: Record<string, string> = {
 
     <div class="card-body">
       <span class="config-status">
-        {{ channel.configured ? 'Configured' : 'Not configured' }}
+        {{ channel.configured ? t('common.configured') : t('common.notConfigured') }}
       </span>
     </div>
 
     <div class="card-actions">
-      <NButton size="small" quaternary @click="emit('configure')">Configure</NButton>
-      <NButton v-if="channel.configured" size="small" quaternary @click="emit('test')">Test</NButton>
+      <NButton size="small" quaternary @click="emit('configure')">{{ t('common.configure') }}</NButton>
+      <NButton v-if="channel.configured" size="small" quaternary @click="emit('test')">{{ t('common.test') }}</NButton>
     </div>
   </div>
 </template>

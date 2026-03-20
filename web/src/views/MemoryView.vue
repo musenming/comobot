@@ -2,9 +2,12 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { NTabs, NTabPane } from 'naive-ui'
 import PageLayout from '../components/PageLayout.vue'
+import { useI18n } from '../composables/useI18n'
 import ChatBubble from '../components/ChatBubble.vue'
 import EmptyState from '../components/EmptyState.vue'
 import api from '../api/client'
+
+const { t } = useI18n()
 
 // --- ComoBrain tab ---
 const canvasRef = ref<HTMLCanvasElement | null>(null)
@@ -115,22 +118,22 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <PageLayout title="Memory & Cognition">
+  <PageLayout :title="t('memory.title')">
     <NTabs type="segment" animated>
-      <NTabPane name="brain" tab="ComoBrain">
+      <NTabPane name="brain" :tab="t('memory.comoBrain')">
         <div class="brain-container">
           <canvas ref="canvasRef" class="brain-canvas" />
           <div class="brain-overlay">
             <span class="brain-icon">&#x25D0;</span>
-            <p>Full visualization coming soon</p>
+            <p>{{ t('memory.visualizationSoon') }}</p>
           </div>
         </div>
       </NTabPane>
 
-      <NTabPane name="sessions" tab="Sessions">
+      <NTabPane name="sessions" :tab="t('memory.sessions')">
         <div class="sessions-layout">
           <div class="sessions-list">
-            <div v-if="loadingSessions" class="loading-text">Loading...</div>
+            <div v-if="loadingSessions" class="loading-text">{{ t('common.loading') }}</div>
             <div
               v-for="s in sessions"
               :key="s.session_key"
@@ -141,11 +144,11 @@ onUnmounted(() => {
               <div class="session-key">{{ s.session_key }}</div>
               <div class="session-time">{{ s.created_at }}</div>
             </div>
-            <EmptyState v-if="!loadingSessions && sessions.length === 0" message="No sessions yet" />
+            <EmptyState v-if="!loadingSessions && sessions.length === 0" :message="t('memory.noSessions')" />
           </div>
           <div class="sessions-detail">
             <template v-if="selectedKey">
-              <div v-if="loadingMessages" class="loading-text">Loading messages...</div>
+              <div v-if="loadingMessages" class="loading-text">{{ t('memory.loadingMessages') }}</div>
               <div v-else class="messages-scroll">
                 <ChatBubble
                   v-for="(msg, i) in messages"
@@ -156,14 +159,14 @@ onUnmounted(() => {
                 />
               </div>
             </template>
-            <EmptyState v-else message="Select a session to view messages" />
+            <EmptyState v-else :message="t('memory.selectSessionView')" />
           </div>
         </div>
       </NTabPane>
 
-      <NTabPane name="knowledge" tab="Knowledge Base">
+      <NTabPane name="knowledge" :tab="t('memory.knowledgeBase')">
         <div class="knowledge-container">
-          <EmptyState message="Personalized knowledge base coming soon" />
+          <EmptyState :message="t('memory.knowledgeBaseSoon')" />
         </div>
       </NTabPane>
     </NTabs>

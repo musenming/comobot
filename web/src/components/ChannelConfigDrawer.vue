@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { NDrawer, NDrawerContent, NForm, NFormItem, NInput, NSelect, NButton, NSpace, NDynamicTags, useMessage } from 'naive-ui'
 import SecretInput from './SecretInput.vue'
 import api, { restartGateway } from '../api/client'
+import { useI18n } from '../composables/useI18n'
 
 const props = defineProps<{
   show: boolean
@@ -15,6 +16,7 @@ const emit = defineEmits<{
   (e: 'saved'): void
 }>()
 
+const { t } = useI18n()
 const message = useMessage()
 const form = ref<Record<string, any>>({})
 const testing = ref(false)
@@ -36,12 +38,12 @@ async function save() {
   saving.value = true
   try {
     await api.put(`/channels/${props.channelType}/config`, { config: form.value })
-    message.success('Configuration saved, restarting gateway...')
+    message.success(t('channels.saveRestart'))
     emit('saved')
     emit('update:show', false)
     restartGateway()
   } catch (e: any) {
-    message.error(e.response?.data?.detail || 'Failed to save')
+    message.error(e.response?.data?.detail || t('channels.failedSave'))
   } finally {
     saving.value = false
   }
@@ -52,9 +54,9 @@ async function test() {
   testing.value = true
   try {
     const { data } = await api.post(`/channels/${props.channelType}/test`)
-    message.success(data.message || 'Test passed')
+    message.success(data.message || t('channels.testPassed'))
   } catch (e: any) {
-    message.error(e.response?.data?.detail || 'Test failed')
+    message.error(e.response?.data?.detail || t('channels.testFailed'))
   } finally {
     testing.value = false
   }
@@ -94,10 +96,10 @@ async function test() {
 
       <template #footer>
         <NSpace justify="space-between" style="width: 100%">
-          <NButton :loading="testing" @click="test">Test Connection</NButton>
+          <NButton :loading="testing" @click="test">{{ t('channels.testConnection') }}</NButton>
           <NSpace>
-            <NButton @click="emit('update:show', false)">Cancel</NButton>
-            <NButton type="primary" :loading="saving" @click="save">Save & Apply</NButton>
+            <NButton @click="emit('update:show', false)">{{ t('common.cancel') }}</NButton>
+            <NButton type="primary" :loading="saving" @click="save">{{ t('channels.saveApply') }}</NButton>
           </NSpace>
         </NSpace>
       </template>

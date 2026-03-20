@@ -2,6 +2,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { NInput, NTag } from 'naive-ui'
 import api from '../api/client'
+import { useI18n } from '../composables/useI18n'
+
+const { t } = useI18n()
 
 const emit = defineEmits<{ select: [id: string] }>()
 
@@ -34,18 +37,18 @@ defineExpose({ reload: load })
 <template>
   <div class="knowhow-sidebar">
     <div class="sidebar-header">
-      <span class="sidebar-title">Know-how</span>
+      <span class="sidebar-title">{{ t('knowhow.title') }}</span>
       <n-input
         v-model:value="search"
         size="small"
-        placeholder="Search..."
+        :placeholder="t('knowhow.search')"
         clearable
         style="max-width: 140px"
       />
     </div>
-    <div v-if="loading" class="sidebar-loading">Loading...</div>
+    <div v-if="loading" class="sidebar-loading">{{ t('common.loading') }}</div>
     <div v-else-if="filtered.length === 0" class="sidebar-empty">
-      {{ search ? 'No matches' : 'No Know-how yet' }}
+      {{ search ? t('knowhow.noMatches') : t('knowhow.noKnowhowYet') }}
     </div>
     <div v-else class="knowhow-list">
       <div

@@ -13,25 +13,27 @@ import {
 } from 'naive-ui'
 import { useBreakpoints } from '@vueuse/core'
 import api from '../api/client'
+import { useI18n } from '../composables/useI18n'
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
 const workflowId = computed(() => route.params.id ? Number(route.params.id) : null)
-const workflowName = ref('New Workflow')
+const workflowName = ref(t('workflowEditor.newWorkflow'))
 const workflowDescription = ref('')
 
 const breakpoints = useBreakpoints({ md: 768 })
 const isMobile = breakpoints.smaller('md')
 
 const NODE_TYPES = [
-  { value: 'trigger', label: 'Trigger', icon: '⚡', color: '#2563EB', desc: 'Start point' },
-  { value: 'llm_call', label: 'LLM Call', icon: '◆', color: '#8B5CF6', desc: 'AI model call' },
-  { value: 'tool', label: 'Tool', icon: '⚙', color: '#F59E0B', desc: 'External action' },
-  { value: 'condition', label: 'Condition', icon: '◇', color: '#EAB308', desc: 'Branch logic' },
-  { value: 'response', label: 'Response', icon: '◈', color: '#22C55E', desc: 'Send reply' },
-  { value: 'delay', label: 'Delay', icon: '◷', color: '#6B7280', desc: 'Wait timer' },
-  { value: 'subagent', label: 'SubAgent', icon: '◎', color: '#EC4899', desc: 'Spawn agent' },
+  { value: 'trigger', label: t('workflowEditor.trigger'), icon: '⚡', color: '#2563EB', desc: t('workflowEditor.startPoint') },
+  { value: 'llm_call', label: t('workflowEditor.llmCall'), icon: '◆', color: '#8B5CF6', desc: t('workflowEditor.aiModelCall') },
+  { value: 'tool', label: t('workflowEditor.tool'), icon: '⚙', color: '#F59E0B', desc: t('workflowEditor.externalAction') },
+  { value: 'condition', label: t('workflowEditor.condition'), icon: '◇', color: '#EAB308', desc: t('workflowEditor.branchLogic') },
+  { value: 'response', label: t('workflowEditor.response'), icon: '◈', color: '#22C55E', desc: t('workflowEditor.sendReply') },
+  { value: 'delay', label: t('workflowEditor.delay'), icon: '◷', color: '#6B7280', desc: t('workflowEditor.waitTimer') },
+  { value: 'subagent', label: t('workflowEditor.subAgent'), icon: '◎', color: '#EC4899', desc: t('workflowEditor.spawnAgent') },
 ]
 
 function getNodeColor(type: string) {
@@ -171,18 +173,18 @@ async function saveWorkflow() {
         description: workflowDescription.value,
         definition,
       })
-      message.success('Workflow saved')
+      message.success(t('workflowEditor.saved'))
     } else {
       const { data } = await api.post('/workflows', {
         name: workflowName.value,
         description: workflowDescription.value,
         definition,
       })
-      message.success('Workflow created')
+      message.success(t('workflowEditor.createdMsg'))
       router.replace(`/workflows/${data.id}/edit`)
     }
   } catch (e: any) {
-    message.error(e.response?.data?.detail || 'Failed to save')
+    message.error(e.response?.data?.detail || t('workflowEditor.failedSave'))
   }
 }
 
@@ -228,7 +230,7 @@ async function loadWorkflow() {
     if (edges.length) addEdges(edges)
     nodeCounter = nodes.length
   } catch {
-    message.error('Failed to load workflow')
+    message.error(t('workflowEditor.failedLoad'))
   }
 }
 
@@ -240,9 +242,9 @@ onMounted(loadWorkflow)
   <div v-if="isMobile" class="mobile-guard">
     <div class="mobile-guard-content">
       <span class="mobile-guard-icon">🖥</span>
-      <h2>Desktop Required</h2>
-      <p>The workflow editor requires a desktop browser for the best experience.</p>
-      <NButton @click="router.push('/workflows')">Back to Workflows</NButton>
+      <h2>{{ t('workflowEditor.desktopRequired') }}</h2>
+      <p>{{ t('workflowEditor.desktopRequiredDesc') }}</p>
+      <NButton @click="router.push('/workflows')">{{ t('workflowEditor.backToWorkflows') }}</NButton>
     </div>
   </div>
 
@@ -250,14 +252,14 @@ onMounted(loadWorkflow)
     <!-- Toolbar -->
     <div class="editor-toolbar">
       <NSpace align="center">
-        <NButton text @click="router.push('/workflows')" class="back-btn">← Back</NButton>
-        <NInput v-model:value="workflowName" placeholder="Workflow name" size="small" style="width: 200px;" />
+        <NButton text @click="router.push('/workflows')" class="back-btn">{{ t('workflowEditor.back') }}</NButton>
+        <NInput v-model:value="workflowName" :placeholder="t('workflowEditor.workflowName')" size="small" style="width: 200px;" />
       </NSpace>
       <NSpace>
         <NButton size="small" @click="showNodePanel = !showNodePanel">
-          {{ showNodePanel ? 'Hide' : 'Show' }} Nodes
+          {{ showNodePanel ? t('workflowEditor.hideNodes') : t('workflowEditor.showNodes') }}
         </NButton>
-        <NButton type="primary" size="small" @click="saveWorkflow">Save</NButton>
+        <NButton type="primary" size="small" @click="saveWorkflow">{{ t('common.save') }}</NButton>
       </NSpace>
     </div>
 
@@ -265,7 +267,7 @@ onMounted(loadWorkflow)
       <!-- Node Panel -->
       <Transition name="panel-slide">
         <div v-if="showNodePanel" class="node-panel">
-          <div class="panel-title">Nodes</div>
+          <div class="panel-title">{{ t('workflowEditor.nodes') }}</div>
           <div
             v-for="nt in NODE_TYPES"
             :key="nt.value"
@@ -302,94 +304,94 @@ onMounted(loadWorkflow)
       <NDrawerContent :title="selectedNode?.label || 'Node Config'">
         <NForm v-if="selectedNode" label-placement="top">
           <template v-if="selectedNode.id.startsWith('trigger')">
-            <NFormItem label="Trigger Type">
+            <NFormItem :label="t('workflowEditor.triggerType')">
               <NSelect
                 v-model:value="nodeForm.trigger_type"
                 :options="[
-                  { label: 'Message', value: 'message' },
-                  { label: 'Cron', value: 'cron' },
-                  { label: 'Webhook', value: 'webhook' },
-                  { label: 'Manual', value: 'manual' },
+                  { label: t('workflowEditor.message'), value: 'message' },
+                  { label: t('workflowEditor.cron'), value: 'cron' },
+                  { label: t('workflowEditor.webhook'), value: 'webhook' },
+                  { label: t('workflowEditor.manual'), value: 'manual' },
                 ]"
               />
             </NFormItem>
           </template>
 
           <template v-if="selectedNode.id.startsWith('llm_call')">
-            <NFormItem label="Model">
-              <NInput v-model:value="nodeForm.model" placeholder="e.g. gpt-4o" />
+            <NFormItem :label="t('workflowEditor.model')">
+              <NInput v-model:value="nodeForm.model" :placeholder="t('workflowEditor.modelPlaceholder')" />
             </NFormItem>
-            <NFormItem label="System Prompt">
+            <NFormItem :label="t('workflowEditor.systemPrompt')">
               <NInput v-model:value="nodeForm.system_prompt" type="textarea" :rows="3" />
             </NFormItem>
-            <NFormItem label="User Message">
+            <NFormItem :label="t('workflowEditor.userMessage')">
               <NInput v-model:value="nodeForm.user_message" type="textarea" :rows="2" placeholder="{{trigger.message}}" />
             </NFormItem>
-            <NFormItem label="Temperature">
+            <NFormItem :label="t('workflowEditor.temperature')">
               <NInputNumber v-model:value="nodeForm.temperature" :min="0" :max="2" :step="0.1" />
             </NFormItem>
-            <NFormItem label="Max Tokens">
+            <NFormItem :label="t('workflowEditor.maxTokens')">
               <NInputNumber v-model:value="nodeForm.max_tokens" :min="1" :max="128000" />
             </NFormItem>
           </template>
 
           <template v-if="selectedNode.id.startsWith('tool')">
-            <NFormItem label="Tool Type">
+            <NFormItem :label="t('workflowEditor.toolType')">
               <NSelect
                 v-model:value="nodeForm.tool_type"
                 :options="[
-                  { label: 'HTTP Request', value: 'http_request' },
-                  { label: 'Shell Command', value: 'shell' },
-                  { label: 'File Read', value: 'file_read' },
+                  { label: t('workflowEditor.httpRequest'), value: 'http_request' },
+                  { label: t('workflowEditor.shellCommand'), value: 'shell' },
+                  { label: t('workflowEditor.fileRead'), value: 'file_read' },
                 ]"
               />
             </NFormItem>
-            <NFormItem label="URL" v-if="nodeForm.tool_type === 'http_request'">
+            <NFormItem :label="t('workflowEditor.url')" v-if="nodeForm.tool_type === 'http_request'">
               <NInput v-model:value="nodeForm.url" placeholder="https://..." />
             </NFormItem>
-            <NFormItem label="Method" v-if="nodeForm.tool_type === 'http_request'">
+            <NFormItem :label="t('workflowEditor.method')" v-if="nodeForm.tool_type === 'http_request'">
               <NSelect v-model:value="nodeForm.method" :options="['GET','POST','PUT','DELETE'].map(m => ({ label: m, value: m }))" />
             </NFormItem>
           </template>
 
           <template v-if="selectedNode.id.startsWith('condition')">
-            <NFormItem label="Expression">
+            <NFormItem :label="t('workflowEditor.expression')">
               <NInput v-model:value="nodeForm.expression" placeholder="{{trigger.channel}} == telegram" />
             </NFormItem>
           </template>
 
           <template v-if="selectedNode.id.startsWith('response')">
-            <NFormItem label="Content">
+            <NFormItem :label="t('workflowEditor.content')">
               <NInput v-model:value="nodeForm.content" type="textarea" :rows="3" placeholder="{{llm.response}}" />
             </NFormItem>
-            <NFormItem label="Channel">
+            <NFormItem :label="t('workflowEditor.channel')">
               <NInput v-model:value="nodeForm.channel" placeholder="{{trigger.channel}}" />
             </NFormItem>
-            <NFormItem label="Chat ID">
+            <NFormItem :label="t('workflowEditor.chatId')">
               <NInput v-model:value="nodeForm.chat_id" placeholder="{{trigger.chat_id}}" />
             </NFormItem>
           </template>
 
           <template v-if="selectedNode.id.startsWith('delay')">
-            <NFormItem label="Delay (seconds)">
+            <NFormItem :label="t('workflowEditor.delaySeconds')">
               <NInputNumber v-model:value="nodeForm.delay_seconds" :min="0" />
             </NFormItem>
           </template>
 
           <template v-if="selectedNode.id.startsWith('subagent')">
-            <NFormItem label="Task Description">
+            <NFormItem :label="t('workflowEditor.taskDescription')">
               <NInput v-model:value="nodeForm.task" type="textarea" :rows="3" />
             </NFormItem>
-            <NFormItem label="Max Iterations">
+            <NFormItem :label="t('workflowEditor.maxIterations')">
               <NInputNumber v-model:value="nodeForm.max_iterations" :min="1" :max="50" />
             </NFormItem>
           </template>
 
           <NSpace justify="space-between" style="margin-top: 16px;">
-            <NButton type="error" size="small" ghost @click="deleteNode">Delete</NButton>
+            <NButton type="error" size="small" ghost @click="deleteNode">{{ t('common.delete') }}</NButton>
             <NSpace>
-              <NButton size="small" @click="showDrawer = false">Cancel</NButton>
-              <NButton type="primary" size="small" @click="saveNodeConfig">Apply</NButton>
+              <NButton size="small" @click="showDrawer = false">{{ t('common.cancel') }}</NButton>
+              <NButton type="primary" size="small" @click="saveNodeConfig">{{ t('common.apply') }}</NButton>
             </NSpace>
           </NSpace>
         </NForm>

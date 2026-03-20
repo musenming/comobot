@@ -7,7 +7,9 @@ import StatusBadge from '../components/StatusBadge.vue'
 import CronExpressionInput from '../components/CronExpressionInput.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import api from '../api/client'
+import { useI18n } from '../composables/useI18n'
 
+const { t } = useI18n()
 const message = useMessage()
 const loading = ref(true)
 const jobs = ref<any[]>([])
@@ -39,7 +41,7 @@ function connectCronWs() {
         // Refresh job list when any cron event occurs
         loadJobs()
         if (data.type === 'job_notification' && data.message) {
-          message.info(`Cron: ${data.job_name || 'Task'} completed`, { duration: 5000 })
+          message.info(t('cron.completed', { name: data.job_name || 'Task' }), { duration: 5000 })
         }
       }
     } catch {
@@ -76,7 +78,7 @@ function formatCountdown(nextRunAt: string | null): string {
   if (!nextRunAt) return '—'
   const target = new Date(nextRunAt).getTime()
   const diff = target - now.value
-  if (diff <= 0) return 'Due now'
+  if (diff <= 0) return t('cron.dueNow')
   const seconds = Math.floor(diff / 1000)
   if (seconds < 60) return `${seconds}s`
   const minutes = Math.floor(seconds / 60)
@@ -121,7 +123,7 @@ function parsePayloadSummary(row: any): string {
 
 const columns = [
   {
-    title: 'Status',
+    title: t('common.status'),
     key: 'enabled',
     width: 80,
     render: (row: any) => {
@@ -132,18 +134,18 @@ const columns = [
     },
   },
   {
-    title: 'Name',
+    title: t('common.name'),
     key: 'name',
     width: 160,
   },
   {
-    title: 'Schedule',
+    title: t('cron.schedule'),
     key: 'schedule',
     width: 140,
     render: (row: any) => parseScheduleDisplay(row),
   },
   {
-    title: 'Task Summary',
+    title: t('cron.taskSummary'),
     key: 'payload',
     ellipsis: { tooltip: true },
     render: (row: any) => {
@@ -152,24 +154,24 @@ const columns = [
     },
   },
   {
-    title: 'Next Run',
+    title: t('cron.nextRun'),
     key: 'next_run_at',
     width: 120,
     render: (row: any) => {
       const countdown = formatCountdown(row.next_run_at)
-      return h('span', { style: countdown === 'Due now' ? 'color: var(--accent-green, #22c55e); font-weight: 500' : '' }, countdown)
+      return h('span', { style: countdown === t('cron.dueNow') ? 'color: var(--accent-green, #22c55e); font-weight: 500' : '' }, countdown)
     },
   },
-  { title: 'Last Run', key: 'last_run_at', width: 140, render: (row: any) => row.last_run_at || '—' },
+  { title: t('cron.lastRun'), key: 'last_run_at', width: 140, render: (row: any) => row.last_run_at || '—' },
   {
-    title: 'Actions',
+    title: t('common.actions'),
     key: 'actions',
     width: 260,
     render: (row: any) => h(NSpace, { size: 4 }, () => [
-      h(NButton, { size: 'small', quaternary: true, onClick: () => runJob(row.id) }, () => 'Run'),
-      h(NButton, { size: 'small', quaternary: true, onClick: () => openEdit(row) }, () => 'Edit'),
-      h(NButton, { size: 'small', quaternary: true, onClick: () => toggleJob(row.id) }, () => row.enabled ? 'Pause' : 'Resume'),
-      h(NButton, { size: 'small', quaternary: true, type: 'error', onClick: () => confirmDelete(row.id) }, () => 'Delete'),
+      h(NButton, { size: 'small', quaternary: true, onClick: () => runJob(row.id) }, () => t('common.run')),
+      h(NButton, { size: 'small', quaternary: true, onClick: () => openEdit(row) }, () => t('common.edit')),
+      h(NButton, { size: 'small', quaternary: true, onClick: () => toggleJob(row.id) }, () => row.enabled ? t('common.pause') : t('common.resume')),
+      h(NButton, { size: 'small', quaternary: true, type: 'error', onClick: () => confirmDelete(row.id) }, () => t('common.delete')),
     ]),
   },
 ]
@@ -204,31 +206,31 @@ function openEdit(row: any) {
 
 async function saveJob() {
   if (!form.value.name || !form.value.expression) {
-    message.warning('Name and expression are required')
+    message.warning(t('cron.nameExprRequired'))
     return
   }
   try {
     if (editingId.value) {
       await api.put(`/cron/${editingId.value}`, form.value)
-      message.success('Job updated')
+      message.success(t('cron.jobUpdated'))
     } else {
       await api.post('/cron', form.value)
-      message.success('Job created')
+      message.success(t('cron.jobCreated'))
     }
     drawerOpen.value = false
     await loadJobs()
   } catch (e: any) {
-    message.error(e.response?.data?.detail || 'Failed to save')
+    message.error(e.response?.data?.detail || t('cron.failedSave'))
   }
 }
 
 async function runJob(id: number) {
   try {
     await api.post(`/cron/${id}/run`)
-    message.success('Job triggered')
+    message.success(t('cron.jobTriggered'))
     await loadJobs()
   } catch (e: any) {
-    message.error(e.response?.data?.detail || 'Failed to run')
+    message.error(e.response?.data?.detail || t('cron.failedRun'))
   }
 }
 
@@ -237,7 +239,7 @@ async function toggleJob(id: number) {
     await api.put(`/cron/${id}/toggle`)
     await loadJobs()
   } catch {
-    message.error('Failed to toggle')
+    message.error(t('cron.failedToggle'))
   }
 }
 
@@ -250,10 +252,10 @@ async function handleDelete() {
   if (!deleteTarget.value) return
   try {
     await api.delete(`/cron/${deleteTarget.value}`)
-    message.success('Job deleted')
+    message.success(t('cron.jobDeleted'))
     await loadJobs()
   } catch {
-    message.error('Failed to delete')
+    message.error(t('cron.failedDelete'))
   }
 }
 
@@ -261,9 +263,9 @@ onMounted(loadJobs)
 </script>
 
 <template>
-  <PageLayout title="Cron Jobs" description="Scheduled automation tasks">
+  <PageLayout :title="t('cron.title')" :description="t('cron.subtitle')">
     <template #actions>
-      <NButton type="primary" @click="openNew">+ New Cron Job</NButton>
+      <NButton type="primary" @click="openNew">{{ t('cron.newJob') }}</NButton>
     </template>
 
     <DataTable
@@ -271,35 +273,35 @@ onMounted(loadJobs)
       :data="jobs"
       :loading="loading"
       empty-icon="&#9719;"
-      empty-title="No cron jobs"
-      empty-description="Create scheduled tasks to automate your workflows."
+      :empty-title="t('cron.noCronJobs')"
+      :empty-description="t('cron.noCronJobsDesc')"
     >
       <template #empty>
-        <NButton type="primary" @click="openNew">+ New Cron Job</NButton>
+        <NButton type="primary" @click="openNew">{{ t('cron.newJob') }}</NButton>
       </template>
     </DataTable>
 
     <!-- Edit Drawer -->
     <NDrawer v-model:show="drawerOpen" :width="420" placement="right">
-      <NDrawerContent :title="editingId ? 'Edit Cron Job' : 'New Cron Job'">
+      <NDrawerContent :title="editingId ? t('cron.editJob') : t('cron.newJobTitle')">
         <NForm label-placement="top">
-          <NFormItem label="Name">
-            <NInput v-model:value="form.name" placeholder="Daily summary" />
+          <NFormItem :label="t('common.name')">
+            <NInput v-model:value="form.name" :placeholder="t('cron.dailySummary')" />
           </NFormItem>
-          <NFormItem label="Cron Expression">
+          <NFormItem :label="t('cron.cronExpression')">
             <CronExpressionInput v-model:value="form.expression" />
           </NFormItem>
-          <NFormItem label="Command / Task">
-            <NInput v-model:value="form.command" type="textarea" :rows="3" placeholder="What to execute..." />
+          <NFormItem :label="t('cron.commandTask')">
+            <NInput v-model:value="form.command" type="textarea" :rows="3" :placeholder="t('cron.whatToExecute')" />
           </NFormItem>
-          <NFormItem label="Description">
-            <NInput v-model:value="form.description" placeholder="Optional description" />
+          <NFormItem :label="t('cron.description')">
+            <NInput v-model:value="form.description" :placeholder="t('cron.optionalDesc')" />
           </NFormItem>
         </NForm>
         <template #footer>
           <NSpace justify="end">
-            <NButton @click="drawerOpen = false">Cancel</NButton>
-            <NButton type="primary" @click="saveJob">Save</NButton>
+            <NButton @click="drawerOpen = false">{{ t('common.cancel') }}</NButton>
+            <NButton type="primary" @click="saveJob">{{ t('common.save') }}</NButton>
           </NSpace>
         </template>
       </NDrawerContent>
@@ -308,8 +310,8 @@ onMounted(loadJobs)
     <!-- Delete Confirmation -->
     <ConfirmDialog
       v-model:show="deleteConfirm"
-      title="Delete Cron Job"
-      description="This action cannot be undone. The cron job will be permanently deleted."
+      :title="t('cron.deleteJob')"
+      :description="t('cron.deleteJobDesc')"
       danger
       @confirm="handleDelete"
     />

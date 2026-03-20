@@ -6,7 +6,10 @@ import ProviderCard from '../components/ProviderCard.vue'
 import ProviderDrawer from '../components/ProviderDrawer.vue'
 import SkeletonCard from '../components/SkeletonCard.vue'
 import EmptyState from '../components/EmptyState.vue'
+import { useI18n } from '../composables/useI18n'
 import api, { restartGateway } from '../api/client'
+
+const { t } = useI18n()
 
 const message = useMessage()
 const loading = ref(true)
@@ -53,10 +56,10 @@ async function saveDefaults() {
   savingDefaults.value = true
   try {
     await api.put('/settings/defaults', defaultsForm.value)
-    message.success('Defaults saved, restarting gateway...')
+    message.success(t('providers.defaultsSaved'))
     restartGateway()
   } catch (e: any) {
-    message.error(e.response?.data?.detail || 'Failed to save defaults')
+    message.error(e.response?.data?.detail || t('providers.failedSaveDefaults'))
   } finally {
     savingDefaults.value = false
   }
@@ -75,20 +78,20 @@ function openEdit(p: any) {
 async function testProvider(p: any) {
   try {
     const { data } = await api.post(`/providers/${p.provider}/test`)
-    message.success(`Test passed - ${data.key_prefix}`)
+    message.success(`${t('providers.testPassed')} ${data.key_prefix}`)
   } catch (e: any) {
-    message.error(e.response?.data?.detail || 'Test failed')
+    message.error(e.response?.data?.detail || t('providers.testFailed'))
   }
 }
 
 async function removeProvider(p: any) {
   try {
     await api.delete(`/providers/${p.provider}/api_key`)
-    message.success('Provider removed, restarting gateway...')
+    message.success(t('providers.removed'))
     await loadProviders()
     restartGateway()
   } catch (e: any) {
-    message.error(e.response?.data?.detail || 'Failed to remove')
+    message.error(e.response?.data?.detail || t('providers.failedRemove'))
   }
 }
 
@@ -98,22 +101,22 @@ onMounted(async () => {
 </script>
 
 <template>
-  <PageLayout title="Providers" description="Configure your AI model providers">
+  <PageLayout :title="t('providers.title')" :description="t('providers.subtitle')">
     <template #actions>
-      <NButton type="primary" @click="openAdd">+ Add Provider</NButton>
+      <NButton type="primary" @click="openAdd">{{ t('providers.addProvider') }}</NButton>
     </template>
 
     <!-- Default Model & Provider selector (above provider cards) -->
     <NCard class="defaults-card" :bordered="true" size="small">
       <div class="defaults-row">
-        <NFormItem label="Default Model" :show-feedback="false" class="defaults-field">
+        <NFormItem :label="t('providers.defaultModel')" :show-feedback="false" class="defaults-field">
           <NInput
             v-model:value="defaultsForm.model"
-            placeholder="e.g. anthropic/claude-opus-4-5"
+            :placeholder="t('providers.defaultModelPlaceholder')"
             size="small"
           />
         </NFormItem>
-        <NFormItem label="Default Provider" :show-feedback="false" class="defaults-field">
+        <NFormItem :label="t('providers.defaultProvider')" :show-feedback="false" class="defaults-field">
           <NSelect
             v-model:value="defaultsForm.provider"
             :options="providerOptions"
@@ -127,7 +130,7 @@ onMounted(async () => {
           class="defaults-save"
           @click="saveDefaults"
         >
-          Save
+          {{ t('common.save') }}
         </NButton>
       </div>
     </NCard>
@@ -136,8 +139,8 @@ onMounted(async () => {
       <SkeletonCard v-for="i in 3" :key="i" height="160px" />
     </div>
     <template v-else-if="providers.length === 0">
-      <EmptyState icon="&#9670;" title="No providers configured" description="Add your first LLM provider to get started.">
-        <NButton type="primary" @click="openAdd">+ Add Provider</NButton>
+      <EmptyState icon="&#9670;" :title="t('providers.noProviders')" :description="t('providers.noProvidersDesc')">
+        <NButton type="primary" @click="openAdd">{{ t('providers.addProvider') }}</NButton>
       </EmptyState>
     </template>
     <div v-else class="provider-grid">

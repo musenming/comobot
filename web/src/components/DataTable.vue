@@ -2,6 +2,9 @@
 import { NDataTable } from 'naive-ui'
 import SkeletonCard from './SkeletonCard.vue'
 import EmptyState from './EmptyState.vue'
+import { useI18n } from '../composables/useI18n'
+
+const { t } = useI18n()
 
 defineProps<{
   columns: any[]
@@ -21,7 +24,7 @@ defineProps<{
     <template v-else-if="data.length === 0">
       <EmptyState
         :icon="emptyIcon || '📭'"
-        :title="emptyTitle || 'No data'"
+        :title="emptyTitle || t('common.noData')"
         :description="emptyDescription"
       >
         <slot name="empty" />
