@@ -1633,6 +1633,18 @@ def _detect_install_method() -> str:
     return "pip"
 
 
+def _ssl_context():
+    """Create an SSL context that works in PyInstaller frozen binaries."""
+    import ssl
+
+    try:
+        import certifi
+
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        return None
+
+
 def _fetch_latest_version() -> str | None:
     """Fetch the latest release version from GitHub."""
     import json as _json
@@ -1642,7 +1654,7 @@ def _fetch_latest_version() -> str | None:
     url = f"https://api.github.com/repos/{repo}/releases/latest"
     try:
         req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=15, context=_ssl_context()) as resp:
             data = _json.loads(resp.read())
         return data.get("tag_name", "").lstrip("v")
     except Exception as exc:
@@ -1699,7 +1711,9 @@ def _update_binary(version: str) -> None:
         archive_path = tmp_path / asset_name
 
         try:
-            urllib.request.urlretrieve(download_url, archive_path)
+            req = urllib.request.Request(download_url)
+            with urllib.request.urlopen(req, context=_ssl_context()) as resp:
+                archive_path.write_bytes(resp.read())
         except Exception as exc:
             console.print(f"[red]Download failed: {exc}[/red]")
             raise typer.Exit(1)

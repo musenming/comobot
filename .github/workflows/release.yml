@@ -60,6 +60,7 @@ jobs:
             --onefile \
             --name comobot \
             --collect-submodules comobot \
+            --collect-all certifi \
             --collect-all litellm \
             --collect-all tiktoken \
             --collect-all tiktoken_ext \
