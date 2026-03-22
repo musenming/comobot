@@ -84,6 +84,11 @@ class SlackChannel(BaseChannel):
             use_thread = thread_ts and channel_type != "im"
             thread_ts_param = thread_ts if use_thread else None
 
+            # Extract inline markdown images from content
+            extra_media: list[str] = []
+            if msg.content:
+                msg.content, extra_media = self.extract_inline_images(msg.content)
+
             if msg.content:
                 await self._web_client.chat_postMessage(
                     channel=msg.chat_id,
@@ -91,7 +96,7 @@ class SlackChannel(BaseChannel):
                     thread_ts=thread_ts_param,
                 )
 
-            for media_path in msg.media or []:
+            for media_path in (msg.media or []) + extra_media:
                 try:
                     await self._web_client.files_upload_v2(
                         channel=msg.chat_id,

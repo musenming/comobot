@@ -1,12 +1,18 @@
 """Base channel interface for chat platforms."""
 
+from __future__ import annotations
+
+import re
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Any
 
 from loguru import logger
 
 from comobot.bus.events import InboundMessage, OutboundMessage
 from comobot.bus.queue import MessageBus
+
+_MEDIA_DIR = Path.home() / ".comobot" / "media"
 
 
 class BaseChannel(ABC):
@@ -57,6 +63,29 @@ class BaseChannel(ABC):
             msg: The message to send.
         """
         pass
+
+    @staticmethod
+    def extract_inline_images(content: str) -> tuple[str, list[str]]:
+        """Extract markdown images ``![alt](/api/media/file)`` from *content*.
+
+        Returns ``(cleaned_content, list_of_local_file_paths)``.
+        Only resolves local ``/api/media/`` references that exist on disk.
+        """
+        paths: list[str] = []
+
+        def _replace(m: re.Match) -> str:
+            url = m.group(2)
+            if url.startswith("/api/media/"):
+                filename = url[len("/api/media/") :]
+                fpath = (_MEDIA_DIR / filename).resolve()
+                if str(fpath).startswith(str(_MEDIA_DIR.resolve())) and fpath.exists():
+                    paths.append(str(fpath))
+                    return ""
+            return m.group(0)
+
+        cleaned = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", _replace, content)
+        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+        return cleaned, paths
 
     def is_allowed(self, sender_id: str) -> bool:
         """Check if *sender_id* is permitted.  Empty list → deny all; ``"*"`` → allow all."""

@@ -416,7 +416,12 @@ class MatrixChannel(BaseChannel):
         if not self.client:
             return
         text = msg.content or ""
-        candidates = self._collect_outbound_media_candidates(msg.media)
+        # Extract inline markdown images from content
+        extra_media: list[str] = []
+        if text:
+            text, extra_media = self.extract_inline_images(text)
+            msg.content = text
+        candidates = self._collect_outbound_media_candidates((msg.media or []) + extra_media)
         relates_to = self._build_thread_relates_to(msg.metadata)
         is_progress = bool((msg.metadata or {}).get("_progress"))
         try:

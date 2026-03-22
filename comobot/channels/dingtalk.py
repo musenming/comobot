@@ -437,10 +437,15 @@ class DingTalkChannel(BaseChannel):
         if not token:
             return
 
+        # Extract inline markdown images from content
+        extra_media: list[str] = []
+        if msg.content:
+            msg.content, extra_media = self.extract_inline_images(msg.content)
+
         if msg.content and msg.content.strip():
             await self._send_markdown_text(token, msg.chat_id, msg.content.strip())
 
-        for media_ref in msg.media or []:
+        for media_ref in (msg.media or []) + extra_media:
             ok = await self._send_media_ref(token, msg.chat_id, media_ref)
             if ok:
                 continue

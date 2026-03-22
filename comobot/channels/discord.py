@@ -104,12 +104,30 @@ class DiscordChannel(BaseChannel):
         headers = {"Authorization": f"Bot {self.config.token}"}
 
         try:
-            chunks = _split_message(msg.content or "")
+            # Extract inline markdown images from content
+            content = msg.content or ""
+            extra_media: list[str] = []
+            if content:
+                content, extra_media = self.extract_inline_images(content)
+
+            # Send media files as attachments
+            for media_path in (msg.media or []) + extra_media:
+                try:
+                    filename = media_path.rsplit("/", 1)[-1] if "/" in media_path else media_path
+                    with open(media_path, "rb") as f:
+                        files = {"file": (filename, f)}
+                        resp = await self._http.post(url, headers=headers, files=files)
+                    if resp.status_code not in (200, 201, 204):
+                        logger.error("Discord file upload failed: {}", resp.text[:200])
+                except Exception as e:
+                    logger.error("Failed to send Discord media {}: {}", media_path, e)
+
+            chunks = _split_message(content)
             if not chunks:
                 return
 
             for i, chunk in enumerate(chunks):
-                payload: dict[str, Any] = {"content": chunk}
+                payload = {"content": chunk}
 
                 # Only set reply reference on the first chunk
                 if i == 0 and msg.reply_to:

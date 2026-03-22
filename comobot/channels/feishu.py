@@ -728,7 +728,12 @@ class FeishuChannel(BaseChannel):
             receive_id_type = "chat_id" if msg.chat_id.startswith("oc_") else "open_id"
             loop = asyncio.get_running_loop()
 
-            for file_path in msg.media:
+            # Extract inline markdown images from content
+            extra_media: list[str] = []
+            if msg.content:
+                msg.content, extra_media = self.extract_inline_images(msg.content)
+
+            for file_path in (msg.media or []) + extra_media:
                 if not os.path.isfile(file_path):
                     logger.warning("Media file not found: {}", file_path)
                     continue

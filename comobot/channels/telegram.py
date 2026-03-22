@@ -253,8 +253,13 @@ class TelegramChannel(BaseChannel):
                     message_id=reply_to_message_id, allow_sending_without_reply=True
                 )
 
-        # Send media files
-        for media_path in msg.media or []:
+        # Extract inline markdown images from content and merge with media
+        extra_media: list[str] = []
+        if msg.content:
+            msg.content, extra_media = self.extract_inline_images(msg.content)
+
+        # Send media files (explicit + extracted from content)
+        for media_path in (msg.media or []) + extra_media:
             try:
                 media_type = self._get_media_type(media_path)
                 sender = {
