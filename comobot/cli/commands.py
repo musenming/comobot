@@ -384,6 +384,8 @@ def _gateway_start(
     verbose: bool = False,
 ):
     """Start the comobot gateway."""
+    import logging
+
     from loguru import logger
 
     from comobot.agent.loop import AgentLoop
@@ -394,13 +396,16 @@ def _gateway_start(
     from comobot.cron.types import CronJob
     from comobot.heartbeat.service import HeartbeatService
     from comobot.session.manager import SessionManager
+    from comobot.utils.log_sanitizer import loguru_sanitize_filter
 
     if verbose:
-        import logging
-
         logging.basicConfig(level=logging.DEBUG)
 
-    # Configure loguru file logging
+    # Suppress noisy third-party loggers
+    for name in ("httpx", "httpcore", "lark_oapi", "lark", "urllib3"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+    # Configure loguru file logging with sanitization
     log_file = _get_log_dir() / "gateway.log"
     logger.add(
         str(log_file),
@@ -409,6 +414,9 @@ def _gateway_start(
         level="DEBUG" if verbose else "INFO",
         format="{time:YYYY-MM-DD HH:mm:ss} | {level:<8} | {name}:{function}:{line} | {message}",
         enqueue=True,
+        backtrace=False,
+        diagnose=False,
+        filter=loguru_sanitize_filter,
     )
     logger.enable("comobot")
 
@@ -825,15 +833,17 @@ def restart(
 
     log_file = _get_log_dir() / "gateway.log"
 
-    # Start gateway as a detached background process
-    with open(log_file, "a") as lf:
-        proc = subprocess.Popen(
-            cmd,
-            stdout=lf,
-            stderr=lf,
-            stdin=subprocess.DEVNULL,
-            start_new_session=True,
-        )
+    # Start gateway as a detached background process (with sanitized output)
+    from comobot.utils.log_sanitizer import SanitizedFileWriter
+
+    lf = SanitizedFileWriter(str(log_file))
+    proc = subprocess.Popen(
+        cmd,
+        stdout=lf,
+        stderr=lf,
+        stdin=subprocess.DEVNULL,
+        start_new_session=True,
+    )
 
     console.print(f"[green]✓[/green] Gateway started (pid={proc.pid})")
     console.print(f"[green]✓[/green] Logs: {log_file}")

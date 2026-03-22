@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Query
 
 from comobot.api.deps import get_current_user, get_db
 from comobot.db.connection import Database
+from comobot.utils.log_sanitizer import sanitize
 
 router = APIRouter(prefix="/api/logs")
 
@@ -61,10 +62,10 @@ async def get_gateway_logs(
     # Read last N lines efficiently
     lines = log_file.read_text(errors="replace").splitlines()
 
-    # Parse loguru-formatted lines and plain lines
+    # Parse loguru-formatted lines and plain lines (sanitize to prevent leaks)
     entries: list[dict] = []
     for raw in lines:
-        raw = raw.strip()
+        raw = sanitize(raw.strip())
         if not raw:
             continue
         m = _LOGURU_RE.match(raw)

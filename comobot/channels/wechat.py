@@ -366,11 +366,16 @@ class WechatChannel(BaseChannel):
                 if msgs:
                     logger.info("wechat: received {} message(s)", len(msgs))
                 for msg in msgs:
-                    logger.debug("wechat: inbound raw: {}", msg)
+                    logger.debug(
+                        "wechat: inbound msg_id={} type={} from={}",
+                        msg.get("message_id", "?"),
+                        msg.get("message_type", "?"),
+                        str(msg.get("from_user_id", "?"))[:16] + "...",
+                    )
                     await self._process_inbound(msg)
 
-            except httpx.ReadTimeout:
-                # Normal for long-poll
+            except (httpx.ReadTimeout, httpx.ReadError):
+                # Normal for long-poll: timeout or transient connection reset
                 continue
             except Exception:
                 logger.exception("wechat: poll iteration error")

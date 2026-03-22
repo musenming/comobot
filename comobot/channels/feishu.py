@@ -330,7 +330,7 @@ class FeishuChannel(BaseChannel):
             lark.Client.builder()
             .app_id(self.config.app_id)
             .app_secret(self.config.app_secret)
-            .log_level(lark.LogLevel.INFO)
+            .log_level(lark.LogLevel.WARNING)
             .build()
         )
 
@@ -349,7 +349,7 @@ class FeishuChannel(BaseChannel):
             self.config.app_id,
             self.config.app_secret,
             event_handler=event_handler,
-            log_level=lark.LogLevel.INFO,
+            log_level=lark.LogLevel.WARNING,
         )
 
         # Disable SSL verification if configured (for proxies/self-signed certs)

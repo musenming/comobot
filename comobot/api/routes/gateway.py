@@ -41,15 +41,17 @@ async def restart_gateway(_user: str = Depends(get_current_user)):
 
     logger.info("Gateway restart requested — spawning new process")
 
-    # Start new gateway process (append to existing log)
-    with open(log_file, "a") as lf:
-        subprocess.Popen(
-            cmd,
-            stdout=lf,
-            stderr=lf,
-            stdin=subprocess.DEVNULL,
-            start_new_session=True,
-        )
+    # Start new gateway process (append to existing log, sanitized)
+    from comobot.utils.log_sanitizer import SanitizedFileWriter
+
+    lf = SanitizedFileWriter(str(log_file))
+    subprocess.Popen(
+        cmd,
+        stdout=lf,
+        stderr=lf,
+        stdin=subprocess.DEVNULL,
+        start_new_session=True,
+    )
 
     # Schedule self-termination after response is sent
     import asyncio

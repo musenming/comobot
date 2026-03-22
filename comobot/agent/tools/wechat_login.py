@@ -212,16 +212,18 @@ class WechatLoginTool(Tool):
                 comobot_bin = "comobot"
             port = int(os.environ.get("COMOBOT_PORT", "18790"))
             cmd = [comobot_bin, "gateway", "--port", str(port)]
+            from comobot.utils.log_sanitizer import SanitizedFileWriter
+
             log_dir = Path.home() / ".comobot" / "logs"
             log_dir.mkdir(parents=True, exist_ok=True)
-            with open(log_dir / "gateway.log", "a") as lf:
-                subprocess.Popen(
-                    cmd,
-                    stdout=lf,
-                    stderr=lf,
-                    stdin=subprocess.DEVNULL,
-                    start_new_session=True,
-                )
+            lf = SanitizedFileWriter(str(log_dir / "gateway.log"))
+            subprocess.Popen(
+                cmd,
+                stdout=lf,
+                stderr=lf,
+                stdin=subprocess.DEVNULL,
+                start_new_session=True,
+            )
             logger.info("wechat_login: spawned new gateway, terminating current process")
             os.kill(os.getpid(), signal.SIGTERM)
 
