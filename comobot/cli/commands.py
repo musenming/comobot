@@ -1591,6 +1591,220 @@ def uninstall(
 
 
 # ============================================================================
+# Update
+# ============================================================================
+
+
+def _detect_install_method() -> str:
+    """Detect how comobot was installed.
+
+    Returns one of: 'binary', 'pip', 'docker'.
+    """
+    # Docker: check /.dockerenv or /proc/1/cgroup
+    if Path("/.dockerenv").exists():
+        return "docker"
+    try:
+        cgroup = Path("/proc/1/cgroup").read_text(errors="ignore")
+        if "docker" in cgroup or "containerd" in cgroup:
+            return "docker"
+    except OSError:
+        pass
+
+    # PyInstaller binary: sys._MEIPASS is set
+    if getattr(sys, "_MEIPASS", None):
+        return "binary"
+
+    # Binary install via install.sh: ~/.comobot/bin/comobot exists
+    binary_path = Path.home() / ".comobot" / "bin" / "comobot"
+    if binary_path.exists():
+        return "binary"
+
+    # Default: assume pip
+    return "pip"
+
+
+def _fetch_latest_version() -> str | None:
+    """Fetch the latest release version from GitHub."""
+    import json as _json
+    import urllib.request
+
+    repo = "musenming/comobot"
+    url = f"https://api.github.com/repos/{repo}/releases/latest"
+    try:
+        req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = _json.loads(resp.read())
+        return data.get("tag_name", "").lstrip("v")
+    except Exception:
+        return None
+
+
+def _update_binary() -> None:
+    """Update binary installation by downloading the latest release."""
+    import platform
+    import tarfile
+    import tempfile
+    import urllib.request
+    import zipfile
+
+    repo = "musenming/comobot"
+    install_dir = Path.home() / ".comobot" / "bin"
+
+    # Detect platform
+    system = platform.system().lower()
+    machine = platform.machine().lower()
+
+    if system == "darwin":
+        plat = "macos"
+    elif system == "linux":
+        plat = "linux"
+    elif system == "windows":
+        plat = "windows"
+    else:
+        console.print(f"[red]Unsupported OS: {system}[/red]")
+        raise typer.Exit(1)
+
+    if machine in ("x86_64", "amd64"):
+        arch = "x64"
+    elif machine in ("arm64", "aarch64"):
+        arch = "arm64"
+    else:
+        console.print(f"[red]Unsupported architecture: {machine}[/red]")
+        raise typer.Exit(1)
+
+    target = f"{plat}-{arch}"
+    console.print(f"  Platform: [cyan]{target}[/cyan]")
+
+    # Fetch latest version
+    version = _fetch_latest_version()
+    if not version:
+        console.print("[red]Failed to fetch latest version from GitHub.[/red]")
+        raise typer.Exit(1)
+
+    console.print(f"  Latest:   [cyan]v{version}[/cyan]")
+
+    if plat == "windows":
+        asset_name = f"comobot-{version}-{target}.zip"
+    else:
+        asset_name = f"comobot-{version}-{target}.tar.gz"
+    download_url = f"https://github.com/{repo}/releases/download/v{version}/{asset_name}"
+
+    # Download
+    console.print(f"  Downloading [cyan]{asset_name}[/cyan]...")
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        archive_path = tmp_path / asset_name
+
+        try:
+            urllib.request.urlretrieve(download_url, archive_path)
+        except Exception as exc:
+            console.print(f"[red]Download failed: {exc}[/red]")
+            raise typer.Exit(1)
+
+        # Extract
+        console.print("  Extracting...")
+        if asset_name.endswith(".tar.gz"):
+            with tarfile.open(archive_path, "r:gz") as tar:
+                tar.extractall(tmp_path)
+            new_binary = tmp_path / "comobot" / "comobot"
+        else:
+            with zipfile.ZipFile(archive_path, "r") as zf:
+                zf.extractall(tmp_path)
+            new_binary = tmp_path / "comobot" / "comobot.exe"
+
+        if not new_binary.exists():
+            console.print("[red]Unexpected archive structure.[/red]")
+            raise typer.Exit(1)
+
+        # Install
+        install_dir.mkdir(parents=True, exist_ok=True)
+        dest = install_dir / new_binary.name
+        import shutil
+
+        shutil.copy2(new_binary, dest)
+        if plat != "windows":
+            dest.chmod(0o755)
+
+    console.print(f"  [green]✓[/green] Updated binary at {dest}")
+
+
+def _update_pip() -> None:
+    """Update pip installation."""
+    console.print("  Running [cyan]pip install --upgrade comobot[/cyan]...")
+    result = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "--upgrade", "comobot"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        console.print(f"[red]pip upgrade failed:[/red]\n{result.stderr}")
+        raise typer.Exit(1)
+    console.print("  [green]✓[/green] pip upgrade complete")
+
+
+def _update_docker() -> None:
+    """Update Docker installation."""
+    image = "ghcr.io/musenming/comobot:latest"
+    console.print(f"  Pulling [cyan]{image}[/cyan]...")
+    result = subprocess.run(
+        ["docker", "pull", image],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        console.print(f"[red]docker pull failed:[/red]\n{result.stderr}")
+        raise typer.Exit(1)
+    console.print("  [green]✓[/green] Pulled latest image")
+    console.print(
+        "\n  [yellow]Note:[/yellow] Please restart your container to use the new version."
+    )
+    console.print("  e.g. [cyan]docker compose up -d[/cyan] or [cyan]docker restart comobot[/cyan]")
+
+
+@app.command()
+def update(
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
+):
+    """Update comobot to the latest version."""
+    console.print(f"{__logo__} comobot Updater\n")
+    console.print(f"  Current:  [cyan]v{__version__}[/cyan]")
+
+    # Detect installation method
+    method = _detect_install_method()
+    console.print(f"  Install:  [cyan]{method}[/cyan]")
+
+    # Check latest version
+    latest = _fetch_latest_version()
+    if latest:
+        console.print(f"  Latest:   [cyan]v{latest}[/cyan]")
+        if latest == __version__:
+            console.print("\n[green]You are already on the latest version.[/green]")
+            return
+    else:
+        console.print("  Latest:   [yellow]unknown (could not reach GitHub)[/yellow]")
+
+    console.print()
+
+    # Confirm
+    if not yes:
+        confirm = typer.confirm(f"Update comobot via {method}?", default=True)
+        if not confirm:
+            console.print("[dim]Aborted.[/dim]")
+            raise typer.Exit(0)
+
+    console.print()
+
+    if method == "binary":
+        _update_binary()
+    elif method == "pip":
+        _update_pip()
+    elif method == "docker":
+        _update_docker()
+
+    console.print("\n[bold green]comobot has been updated![/bold green]")
+
+
+# ============================================================================
 # Download stats
 # ============================================================================
 

@@ -184,14 +184,23 @@ comobot gateway
 ## 常用命令
 
 ```bash
-comobot --help
-comobot --version
-comobot agent -m "Hello"
-comobot channels login
-pytest tests/ -v
-ruff check .
-ruff format .
+comobot --help               # 查看帮助
+comobot --version            # 查看版本
+comobot onboard              # 初始化配置
+comobot agent                # 交互式对话
+comobot agent -m "Hello"     # 发送单条消息
+comobot gateway              # 启动网关 + Web 控制台
+comobot gateway restart      # 重启网关
+comobot status               # 查看运行状态
+comobot channels status      # 查看渠道状态
+comobot channels login       # 扫码连接渠道
+comobot update               # 自动更新到最新版本
+comobot uninstall            # 卸载 comobot
+comobot provider login       # OAuth 登录 LLM 提供商
+comobot stats                # 查看下载统计
 ```
+
+> 完整 CLI 参考见 [`docs/CLI.md`](./docs/CLI.md)
 
 ---
 
@@ -241,6 +250,7 @@ comobot/
 ## 相关文档
 
 - 安装说明：[`INSTALL.md`](./INSTALL.md)
+- CLI 参考：[`docs/CLI.md`](./docs/CLI.md)
 - 安全策略：[`SECURITY.md`](./SECURITY.md)
 - 项目结构：[`structure.md`](./structure.md)
 - 需求规格：[`PRD.md`](./PRD.md)
