@@ -22,6 +22,7 @@ CHANNEL_TYPES = [
     "qq",
     "matrix",
     "mochat",
+    "wechat",
 ]
 
 CHANNEL_CONFIG_FIELDS: dict[str, list[dict]] = {
@@ -80,6 +81,23 @@ CHANNEL_CONFIG_FIELDS: dict[str, list[dict]] = {
         {"key": "access_token", "label": "Access Token", "type": "secret", "required": True},
     ],
     "mochat": [],
+    "wechat": [
+        {
+            "key": "token",
+            "label": "Plugin Token",
+            "type": "secret",
+            "required": False,
+            "description": "Shared token configured in openclaw-weixin plugin (optional but recommended)",
+        },
+        {
+            "key": "plugin_port",
+            "label": "Plugin Port",
+            "type": "text",
+            "default": "19088",
+            "description": "Local port of the openclaw-weixin plugin",
+        },
+        {"key": "allow_from", "label": "Allowed WeChat OpenIDs", "type": "tags"},
+    ],
 }
 
 

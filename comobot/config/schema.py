@@ -125,6 +125,17 @@ class EmailConfig(Base):
     allow_from: list[str] = Field(default_factory=list)  # Allowed sender email addresses
 
 
+class WechatConfig(Base):
+    """WeChat channel configuration via OpenClaw WeChat plugin."""
+
+    enabled: bool = False
+    # Port that the openclaw-weixin plugin listens on for outbound messages
+    plugin_port: int = 19088
+    # Shared token for request verification (set same value in plugin config)
+    token: str = ""
+    allow_from: list[str] = Field(default_factory=list)  # Allowed WeChat openids
+
+
 class MochatMentionConfig(Base):
     """Mochat mention behavior configuration."""
 
@@ -215,6 +226,7 @@ class ChannelsConfig(Base):
     slack: SlackConfig = Field(default_factory=SlackConfig)
     qq: QQConfig = Field(default_factory=QQConfig)
     matrix: MatrixConfig = Field(default_factory=MatrixConfig)
+    wechat: WechatConfig = Field(default_factory=WechatConfig)
 
 
 class HybridSearchConfig(Base):

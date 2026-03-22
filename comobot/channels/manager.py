@@ -34,6 +34,7 @@ class ChannelManager:
         "slack": ("comobot.channels.slack", "SlackChannel"),
         "qq": ("comobot.channels.qq", "QQChannel"),
         "matrix": ("comobot.channels.matrix", "MatrixChannel"),
+        "wechat": ("comobot.channels.wechat", "WechatChannel"),
     }
 
     def __init__(self, config: Config, bus: MessageBus):
