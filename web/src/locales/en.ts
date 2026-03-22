@@ -437,6 +437,16 @@ const en = {
     setupFailed: 'Setup failed',
     passwordUpdated: 'Password updated',
     passwordUpdateFailed: 'Failed to update password',
+    wechatLoadingQr: 'Loading QR code...',
+    wechatCheckScan: 'I have scanned',
+    wechatRefreshQr: 'Refresh QR',
+    wechatRetry: 'Retry',
+    wechatLoginSuccess: 'WeChat login successful!',
+    wechatScanned: 'Scanned, please confirm on WeChat...',
+    wechatExpired: 'QR code expired, please refresh',
+    wechatNotScanned: 'Not scanned yet, please scan with WeChat',
+    wechatQrFailed: 'Failed to load QR code',
+    wechatPollFailed: 'Failed to check status',
   },
 
   // Confirm Dialog

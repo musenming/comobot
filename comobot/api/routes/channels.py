@@ -17,6 +17,7 @@ CHANNEL_TYPES = [
     "slack",
     "feishu",
     "dingtalk",
+    "wechat",
     "email",
     "whatsapp",
     "qq",
@@ -79,6 +80,7 @@ CHANNEL_CONFIG_FIELDS: dict[str, list[dict]] = {
         {"key": "homeserver", "label": "Homeserver URL", "type": "text", "required": True},
         {"key": "access_token", "label": "Access Token", "type": "secret", "required": True},
     ],
+    "wechat": [],  # WeChat uses QR code login, no manual config fields
     "mochat": [],
 }
 
@@ -125,6 +127,13 @@ async def list_channels(
                     if getattr(ch_cfg, attr, ""):
                         configured = True
                         break
+
+        # WeChat: check credential file instead of vault/config fields
+        if ch == "wechat" and not configured:
+            from pathlib import Path
+
+            cred_file = Path.home() / ".comobot" / "wechat-auth" / "credentials.json"
+            configured = cred_file.exists()
 
         enabled = False
         ch_cfg = getattr(config.channels, ch, None)
@@ -314,3 +323,69 @@ async def remove_allowed_user(
         (channel, user_id),
     )
     return {"deleted": True}
+
+
+# --------------- WeChat QR login endpoints ---------------
+
+
+class WechatPollRequest(BaseModel):
+    qrcode_token: str
+    uin: str
+
+
+@router.post("/wechat/qr")
+async def wechat_get_qr():
+    """Get WeChat login QR code (no auth required for setup flow)."""
+    from comobot.agent.tools.wechat_login import WechatLoginTool
+
+    tool = WechatLoginTool()
+    result = await tool.execute(action="qr")
+    # Parse out the image URL and tokens from the tool result
+    image_url = ""
+    qrcode_token = ""
+    uin = ""
+    for line in result.split("\n"):
+        if line.startswith("!["):
+            # Extract markdown image URL
+            start = line.index("(") + 1
+            end = line.index(")")
+            image_url = line[start:end]
+        elif line.startswith("QRCODE_TOKEN="):
+            qrcode_token = line.split("=", 1)[1]
+        elif line.startswith("UIN="):
+            uin = line.split("=", 1)[1]
+
+    if not qrcode_token:
+        return {"success": False, "message": result}
+
+    return {
+        "success": True,
+        "image_url": image_url,
+        "qrcode_token": qrcode_token,
+        "uin": uin,
+    }
+
+
+@router.post("/wechat/qr/poll")
+async def wechat_poll_qr(body: WechatPollRequest):
+    """Poll WeChat QR scan status (no gateway restart)."""
+    from comobot.agent.tools.wechat_login import WechatLoginTool
+
+    tool = WechatLoginTool()
+    result = await tool.execute(
+        action="poll",
+        qrcode_token=body.qrcode_token,
+        uin=body.uin,
+        auto_restart=False,
+    )
+    # Determine status from result text
+    if "登录成功" in result:
+        status = "confirmed"
+    elif "已扫码" in result:
+        status = "scanned"
+    elif "已过期" in result or "超时" in result:
+        status = "expired"
+    else:
+        status = "pending"
+
+    return {"status": status, "message": result}

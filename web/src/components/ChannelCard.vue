@@ -29,7 +29,8 @@ const iconMap: Record<string, string> = {
   whatsapp: '📱',
   qq: '🐧',
   matrix: '▣',
-  mochat: '💬',
+  wechat: '💬',
+  mochat: '🤖',
 }
 </script>
 

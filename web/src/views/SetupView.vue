@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { NForm, NFormItem, NInput, NButton, NSelect, NSpace, NDynamicTags, useMessage } from 'naive-ui'
+import { NForm, NFormItem, NInput, NButton, NSelect, NSpace, NDynamicTags, NSpin, useMessage } from 'naive-ui'
 import SecretInput from '../components/SecretInput.vue'
 import api, { restartGateway } from '../api/client'
 import { useI18n } from '../composables/useI18n'
@@ -189,6 +189,15 @@ function onProviderChange() {
   form.value.provider_config = cfg
 }
 
+// WeChat QR login state
+const wechatQrUrl = ref('')
+const wechatToken = ref('')
+const wechatUin = ref('')
+const wechatLoading = ref(false)
+const wechatStatus = ref<'idle' | 'qr' | 'scanned' | 'confirmed' | 'expired' | 'error'>('idle')
+const wechatMessage = ref('')
+let wechatPollTimer: ReturnType<typeof setInterval> | null = null
+
 function onChannelChange() {
   // Reset channel config with defaults
   const cfg: Record<string, string | string[]> = {}
@@ -200,7 +209,80 @@ function onChannelChange() {
     }
   }
   form.value.channel_config = cfg
+
+  // Reset wechat state
+  wechatStatus.value = 'idle'
+  wechatQrUrl.value = ''
+  wechatToken.value = ''
+  wechatUin.value = ''
+  wechatMessage.value = ''
+  if (wechatPollTimer) {
+    clearInterval(wechatPollTimer)
+    wechatPollTimer = null
+  }
+
+  // Auto-fetch QR when wechat selected
+  if (form.value.channel_type === 'wechat') {
+    fetchWechatQr()
+  }
 }
+
+async function fetchWechatQr() {
+  wechatLoading.value = true
+  wechatStatus.value = 'idle'
+  wechatMessage.value = ''
+  try {
+    const { data } = await api.post('/channels/wechat/qr')
+    if (data.success) {
+      wechatQrUrl.value = data.image_url
+      wechatToken.value = data.qrcode_token
+      wechatUin.value = data.uin
+      wechatStatus.value = 'qr'
+    } else {
+      wechatStatus.value = 'error'
+      wechatMessage.value = data.message || t('setup.wechatQrFailed')
+    }
+  } catch {
+    wechatStatus.value = 'error'
+    wechatMessage.value = t('setup.wechatQrFailed')
+  } finally {
+    wechatLoading.value = false
+  }
+}
+
+async function pollWechatStatus() {
+  if (!wechatToken.value || !wechatUin.value) return
+  wechatLoading.value = true
+  wechatMessage.value = ''
+  try {
+    const { data } = await api.post('/channels/wechat/qr/poll', {
+      qrcode_token: wechatToken.value,
+      uin: wechatUin.value,
+    })
+    if (data.status === 'confirmed') {
+      wechatStatus.value = 'confirmed'
+      wechatMessage.value = t('setup.wechatLoginSuccess')
+    } else if (data.status === 'scanned') {
+      wechatStatus.value = 'scanned'
+      wechatMessage.value = t('setup.wechatScanned')
+    } else if (data.status === 'expired') {
+      wechatStatus.value = 'expired'
+      wechatMessage.value = t('setup.wechatExpired')
+    } else {
+      wechatStatus.value = 'qr'
+      wechatMessage.value = t('setup.wechatNotScanned')
+    }
+  } catch {
+    wechatStatus.value = 'error'
+    wechatMessage.value = t('setup.wechatPollFailed')
+  } finally {
+    wechatLoading.value = false
+  }
+}
+
+onUnmounted(() => {
+  if (wechatPollTimer) clearInterval(wechatPollTimer)
+})
 
 async function validateKey() {
   const apiKey = form.value.provider_config['api_key']
@@ -379,8 +461,55 @@ async function finishSetup() {
             />
           </NFormItem>
 
-          <!-- Dynamic channel fields -->
-          <template v-if="form.channel_type && channelFields.length">
+          <!-- WeChat QR login flow -->
+          <template v-if="form.channel_type === 'wechat'">
+            <div class="wechat-qr-section">
+              <div v-if="wechatLoading" class="qr-loading">
+                <NSpin size="large" />
+                <span>{{ t('setup.wechatLoadingQr') }}</span>
+              </div>
+
+              <template v-else-if="wechatStatus === 'qr' || wechatStatus === 'scanned'">
+                <div class="qr-image-wrapper">
+                  <img :src="wechatQrUrl" alt="WeChat QR" class="qr-image" />
+                </div>
+                <div class="qr-actions">
+                  <NButton
+                    type="primary"
+                    size="large"
+                    :loading="wechatLoading"
+                    @click="pollWechatStatus"
+                  >
+                    {{ t('setup.wechatCheckScan') }}
+                  </NButton>
+                  <NButton size="large" quaternary @click="fetchWechatQr">
+                    {{ t('setup.wechatRefreshQr') }}
+                  </NButton>
+                </div>
+              </template>
+
+              <div v-else-if="wechatStatus === 'confirmed'" class="qr-result success">
+                ✅ {{ t('setup.wechatLoginSuccess') }}
+              </div>
+
+              <div v-else-if="wechatStatus === 'expired'" class="qr-result expired">
+                <span>{{ t('setup.wechatExpired') }}</span>
+                <NButton size="small" @click="fetchWechatQr">{{ t('setup.wechatRefreshQr') }}</NButton>
+              </div>
+
+              <div v-else-if="wechatStatus === 'error'" class="qr-result error">
+                <span>{{ wechatMessage }}</span>
+                <NButton size="small" @click="fetchWechatQr">{{ t('setup.wechatRetry') }}</NButton>
+              </div>
+
+              <div v-if="wechatMessage && wechatStatus === 'scanned'" class="qr-hint">
+                {{ wechatMessage }}
+              </div>
+            </div>
+          </template>
+
+          <!-- Dynamic channel fields (non-wechat) -->
+          <template v-else-if="form.channel_type && channelFields.length">
             <NFormItem
               v-for="field in channelFields"
               :key="field.key"
@@ -607,6 +736,68 @@ async function finishSetup() {
 .url-value {
   color: var(--text-primary);
   font-weight: 500;
+}
+
+/* WeChat QR */
+.wechat-qr-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) 0;
+}
+.qr-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-8) 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+.qr-image-wrapper {
+  background: #fff;
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  box-shadow: var(--shadow-sm);
+}
+.qr-image {
+  width: 240px;
+  height: 240px;
+  display: block;
+}
+.qr-actions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+.qr-result {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  width: 100%;
+}
+.qr-result.success {
+  background: color-mix(in srgb, var(--accent-green) 10%, transparent);
+  color: var(--accent-green);
+  border: 1px solid color-mix(in srgb, var(--accent-green) 30%, transparent);
+}
+.qr-result.expired {
+  background: color-mix(in srgb, var(--accent-yellow) 10%, transparent);
+  color: var(--accent-yellow);
+  border: 1px solid color-mix(in srgb, var(--accent-yellow) 30%, transparent);
+}
+.qr-result.error {
+  background: color-mix(in srgb, var(--accent-red) 10%, transparent);
+  color: var(--accent-red);
+  border: 1px solid color-mix(in srgb, var(--accent-red) 30%, transparent);
+}
+.qr-hint {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 /* Slide transition */

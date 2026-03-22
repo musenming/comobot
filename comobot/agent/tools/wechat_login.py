@@ -63,9 +63,10 @@ class WechatLoginTool(Tool):
         elif action == "poll":
             token = kwargs.get("qrcode_token", "")
             uin = kwargs.get("uin", "")
+            auto_restart = kwargs.get("auto_restart", True)
             if not token or not uin:
                 return "Error: qrcode_token and uin are required for poll action."
-            return await self._poll_status(token, uin)
+            return await self._poll_status(token, uin, auto_restart=auto_restart)
         return f"Unknown action: {action}"
 
     async def _get_qr(self) -> str:
@@ -112,7 +113,7 @@ class WechatLoginTool(Tool):
             f"UIN={uin}"
         )
 
-    async def _poll_status(self, qrcode_token: str, uin: str) -> str:
+    async def _poll_status(self, qrcode_token: str, uin: str, *, auto_restart: bool = True) -> str:
         import asyncio
 
         import httpx
@@ -136,7 +137,7 @@ class WechatLoginTool(Tool):
                     status = data.get("status", "")
 
                     if status == "confirmed":
-                        return self._handle_confirmed(data, base_url)
+                        return self._handle_confirmed(data, base_url, auto_restart=auto_restart)
 
                     if status == "expired":
                         return "二维码已过期，请重新发起「登录微信」。"
@@ -151,7 +152,7 @@ class WechatLoginTool(Tool):
             logger.exception("wechat_login: poll failed")
             return f"轮询状态失败: {e}"
 
-    def _handle_confirmed(self, data: dict, base_url: str) -> str:
+    def _handle_confirmed(self, data: dict, base_url: str, *, auto_restart: bool = True) -> str:
         bot_token = data.get("bot_token", "")
         bot_id = data.get("bot_id", "")
         user_id = data.get("user_id", "")
@@ -173,8 +174,9 @@ class WechatLoginTool(Tool):
         # Enable in config
         self._enable_wechat_config()
 
-        # Auto-restart gateway
-        self._schedule_gateway_restart()
+        # Auto-restart gateway (skip during setup flow)
+        if auto_restart:
+            self._schedule_gateway_restart()
 
         return (
             f"✅ 微信登录成功！\n"
