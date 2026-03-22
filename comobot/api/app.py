@@ -58,7 +58,6 @@ def create_app(
     from comobot.api.routes.health import router as health_router
     from comobot.api.routes.knowhow import router as knowhow_router
     from comobot.api.routes.logs import router as logs_router
-    from comobot.api.routes.openclaw import router as openclaw_router
     from comobot.api.routes.providers import router as providers_router
     from comobot.api.routes.sessions import router as sessions_router
     from comobot.api.routes.settings import router as settings_router
@@ -69,7 +68,6 @@ def create_app(
     from comobot.api.routes.ws import router as ws_router
 
     app.include_router(health_router)
-    app.include_router(openclaw_router)
     app.include_router(auth_router)
     app.include_router(gateway_router)
     app.include_router(chat_router)

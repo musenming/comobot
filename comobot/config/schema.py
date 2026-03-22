@@ -126,13 +126,11 @@ class EmailConfig(Base):
 
 
 class WechatConfig(Base):
-    """WeChat channel configuration via OpenClaw WeChat plugin."""
+    """WeChat channel configuration via openclaw-bridge (Node.js bridge process)."""
 
     enabled: bool = False
-    # Port that the openclaw-weixin plugin listens on for outbound messages
-    plugin_port: int = 19088
-    # Shared token for request verification (set same value in plugin config)
-    token: str = ""
+    bridge_url: str = "ws://localhost:3002"  # WebSocket URL of the openclaw-bridge
+    bridge_token: str = ""  # Shared token for bridge auth (optional, recommended)
     allow_from: list[str] = Field(default_factory=list)  # Allowed WeChat openids
 
 

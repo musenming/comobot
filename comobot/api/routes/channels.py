@@ -83,18 +83,10 @@ CHANNEL_CONFIG_FIELDS: dict[str, list[dict]] = {
     "mochat": [],
     "wechat": [
         {
-            "key": "token",
-            "label": "Plugin Token",
+            "key": "bridge_token",
+            "label": "Bridge Token",
             "type": "secret",
-            "required": False,
-            "description": "Shared token configured in openclaw-weixin plugin (optional but recommended)",
-        },
-        {
-            "key": "plugin_port",
-            "label": "Plugin Port",
-            "type": "text",
-            "default": "19088",
-            "description": "Local port of the openclaw-weixin plugin",
+            "description": "Shared token set in BRIDGE_TOKEN env var when starting openclaw-bridge (optional but recommended)",
         },
         {"key": "allow_from", "label": "Allowed WeChat OpenIDs", "type": "tags"},
     ],
