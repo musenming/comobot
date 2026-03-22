@@ -57,3 +57,6 @@ logs/
 # Runtime data
 *.pid
 *.seed
+
+# Test artifacts (mock Path leaks)
+<MagicMock*

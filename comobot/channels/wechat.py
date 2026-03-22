@@ -114,7 +114,9 @@ class WechatChannel(BaseChannel):
         }
 
         try:
-            logger.debug("wechat: sending to {} with context_token={}...", chat_id, context_token[:20])
+            logger.debug(
+                "wechat: sending to {} with context_token={}...", chat_id, context_token[:20]
+            )
             resp = await self._api_post("/ilink/bot/sendmessage", body)
             if resp.status_code != 200:
                 logger.error("wechat: sendmessage HTTP {}: {}", resp.status_code, resp.text)
@@ -171,9 +173,7 @@ class WechatChannel(BaseChannel):
 
                 consecutive_failures = 0
 
-                new_buf = (
-                    data.get("get_updates_buf") or data.get("sync_buf") or ""
-                )
+                new_buf = data.get("get_updates_buf") or data.get("sync_buf") or ""
                 if new_buf:
                     self._sync_buf = new_buf
                     self._save_sync_buf()
