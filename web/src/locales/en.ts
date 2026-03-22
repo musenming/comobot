@@ -317,6 +317,9 @@ const en = {
     loadingLogs: 'Loading logs...',
     noLogsMatch: 'No logs match your filter',
     newLogs: 'New logs',
+    auditTab: 'Audit Log',
+    gatewayTab: 'Gateway Log',
+    refresh: 'Refresh',
   },
 
   // Memory
@@ -374,7 +377,7 @@ const en = {
     qmdDescription:
       'When enabled, memory search uses a local AI model for semantic matching with synonym understanding and contextual search. Requires ~1.2GB extra memory (low-memory devices auto-switch to on-demand mode). First-time setup will automatically download and install the required components (~80MB total), which may take 1-2 minutes. Disabling falls back to keyword search without restart.',
     noGpuWarning: 'No GPU detected — CPU mode will be slower',
-    agent: 'Agent',
+    profile: 'Profile',
     memoryReadOnly: 'MEMORY.md (Read Only)',
     noMemories: 'No memories yet.',
     security: 'Security',

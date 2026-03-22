@@ -319,6 +319,9 @@ const zh: LocaleMessages = {
     loadingLogs: '加载日志中...',
     noLogsMatch: '没有匹配的日志',
     newLogs: '新日志',
+    auditTab: '审计日志',
+    gatewayTab: 'Gateway 日志',
+    refresh: '刷新',
   },
 
   // Memory
@@ -376,7 +379,7 @@ const zh: LocaleMessages = {
     qmdDescription:
       '启用后，记忆搜索将使用本地 AI 模型进行语义匹配，支持同义词理解和上下文搜索。需要约 1.2GB 额外内存（低内存设备会自动切换为按需模式）。首次设置将自动下载并安装所需组件（约 80MB），可能需要 1-2 分钟。禁用后将回退到关键词搜索，无需重启。',
     noGpuWarning: '未检测到 GPU — CPU 模式会较慢',
-    agent: '代理',
+    profile: '档案',
     memoryReadOnly: 'MEMORY.md（只读）',
     noMemories: '暂无记忆。',
     security: '安全',

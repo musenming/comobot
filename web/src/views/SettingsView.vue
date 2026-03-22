@@ -18,14 +18,15 @@ const themeStore = useThemeStore()
 const passwordForm = ref({ new_password: '', confirm_password: '' })
 const savingPassword = ref(false)
 
-// Agent files — unified editor
-const agentFiles = ref<Record<string, string>>({
+// Profile files — unified editor
+const profileFiles = ref<Record<string, string>>({
+  'IDENTITY.md': '',
   'SOUL.md': '',
   'USER.md': '',
   'AGENTS.md': '',
 })
-const activeAgentFile = ref('SOUL.md')
-const savingAgent = ref(false)
+const activeProfileFile = ref('IDENTITY.md')
+const savingProfile = ref(false)
 
 // Memory (read only)
 const memoryContent = ref('')
@@ -57,28 +58,31 @@ const themeOptions = computed(() => [
   { label: t('settings.system'), value: 'system' },
 ])
 
-const agentFileOptions = [
+const profileFileOptions = [
+  { label: 'IDENTITY.md', value: 'IDENTITY.md' },
   { label: 'SOUL.md', value: 'SOUL.md' },
   { label: 'USER.md', value: 'USER.md' },
   { label: 'AGENTS.md', value: 'AGENTS.md' },
 ]
 
 const currentContent = computed({
-  get: () => agentFiles.value[activeAgentFile.value] || '',
-  set: (v: string) => { agentFiles.value[activeAgentFile.value] = v },
+  get: () => profileFiles.value[activeProfileFile.value] || '',
+  set: (v: string) => { profileFiles.value[activeProfileFile.value] = v },
 })
 
 onMounted(async () => {
   try {
-    const [soul, user, agents, memory] = await Promise.all([
+    const [identity, soul, user, agents, memory] = await Promise.all([
+      api.get('/settings/identity').catch(() => ({ data: { content: '' } })),
       api.get('/settings/soul'),
       api.get('/settings/user'),
       api.get('/settings/agents').catch(() => ({ data: { content: '' } })),
       api.get('/settings/memory'),
     ])
-    agentFiles.value['SOUL.md'] = soul.data.content || ''
-    agentFiles.value['USER.md'] = user.data.content || ''
-    agentFiles.value['AGENTS.md'] = agents.data.content || ''
+    profileFiles.value['IDENTITY.md'] = identity.data.content || ''
+    profileFiles.value['SOUL.md'] = soul.data.content || ''
+    profileFiles.value['USER.md'] = user.data.content || ''
+    profileFiles.value['AGENTS.md'] = agents.data.content || ''
     memoryContent.value = memory.data.content || ''
   } catch {
     // May fail if files don't exist yet
@@ -107,23 +111,24 @@ async function savePassword() {
   }
 }
 
-async function saveAgentFile() {
-  savingAgent.value = true
+async function saveProfileFile() {
+  savingProfile.value = true
   const fileMap: Record<string, string> = {
+    'IDENTITY.md': '/settings/identity',
     'SOUL.md': '/settings/soul',
     'USER.md': '/settings/user',
     'AGENTS.md': '/settings/agents',
   }
-  const endpoint = fileMap[activeAgentFile.value]
+  const endpoint = fileMap[activeProfileFile.value]
   if (!endpoint) return
   try {
     await api.put(endpoint, { content: currentContent.value })
-    message.success(`${activeAgentFile.value} saved`)
+    message.success(`${activeProfileFile.value} saved`)
     restartGateway()
   } catch {
     message.error(t('channels.failedSave'))
   } finally {
-    savingAgent.value = false
+    savingProfile.value = false
   }
 }
 
@@ -302,18 +307,18 @@ async function reindexQMD() {
         </div>
       </NTabPane>
 
-      <!-- Agent -->
-      <NTabPane name="agent" :tab="t('settings.agent')">
+      <!-- Profile -->
+      <NTabPane name="profile" :tab="t('settings.profile')">
         <div class="agent-editor">
           <!-- File selector bar -->
           <div class="editor-toolbar">
             <div class="file-tabs">
               <button
-                v-for="opt in agentFileOptions"
+                v-for="opt in profileFileOptions"
                 :key="opt.value"
                 class="file-tab"
-                :class="{ active: activeAgentFile === opt.value }"
-                @click="activeAgentFile = opt.value"
+                :class="{ active: activeProfileFile === opt.value }"
+                @click="activeProfileFile = opt.value"
               >
                 {{ opt.label }}
               </button>
@@ -322,8 +327,8 @@ async function reindexQMD() {
               <NButton
                 size="small"
                 type="primary"
-                :loading="savingAgent"
-                @click="saveAgentFile"
+                :loading="savingProfile"
+                @click="saveProfileFile"
               >
                 {{ t('common.save') }}
               </NButton>
@@ -339,7 +344,7 @@ async function reindexQMD() {
               :preview="true"
               preview-theme="github"
               :style="{ height: '500px' }"
-              :placeholder="`Edit ${activeAgentFile}...`"
+              :placeholder="`Edit ${activeProfileFile}...`"
               :toolbars="['bold', 'underline', 'italic', 'strikeThrough', '-', 'title', 'sub', 'sup', 'quote', 'unorderedList', 'orderedList', 'task', '-', 'codeRow', 'code', 'link', 'table', '-', 'revoke', 'next', '=', 'pageFullscreen', 'preview', 'catalog']"
             />
           </div>

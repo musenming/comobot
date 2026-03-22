@@ -358,6 +358,20 @@ class AgentLoop:
         return re.sub(r"<think>[\s\S]*?</think>", "", text).strip() or None
 
     @staticmethod
+    def _extract_media_from_text(text: str) -> list[str]:
+        """Extract local media file paths from markdown image references in text."""
+        media_dir = Path.home() / ".comobot" / "media"
+        paths: list[str] = []
+        for m in re.finditer(r"!\[[^\]]*\]\(([^)]+)\)", text):
+            url = m.group(1)
+            if url.startswith("/api/media/"):
+                filename = url[len("/api/media/") :]
+                fpath = (media_dir / filename).resolve()
+                if str(fpath).startswith(str(media_dir.resolve())) and fpath.exists():
+                    paths.append(str(fpath))
+        return paths
+
+    @staticmethod
     def _tool_hint(tool_calls: list) -> str:
         """Format tool calls as concise hint, e.g. 'web_search("query")'."""
 
@@ -374,12 +388,13 @@ class AgentLoop:
         self,
         initial_messages: list[dict],
         on_progress: Callable[..., Awaitable[None]] | None = None,
-    ) -> tuple[str | None, list[str], list[dict]]:
-        """Run the agent iteration loop. Returns (final_content, tools_used, messages)."""
+    ) -> tuple[str | None, list[str], list[dict], list[str]]:
+        """Run the agent iteration loop. Returns (final_content, tools_used, messages, media)."""
         messages = initial_messages
         iteration = 0
         final_content = None
         tools_used: list[str] = []
+        collected_media: list[str] = []
 
         while iteration < self.max_iterations:
             iteration += 1
@@ -424,6 +439,9 @@ class AgentLoop:
                     args_str = json.dumps(tool_call.arguments, ensure_ascii=False)
                     logger.info("Tool call: {}({})", tool_call.name, args_str[:200])
                     result = await self.tools.execute(tool_call.name, tool_call.arguments)
+                    # Collect media references from tool results
+                    if isinstance(result, str):
+                        collected_media.extend(self._extract_media_from_text(result))
                     messages = self.context.add_tool_result(
                         messages, tool_call.id, tool_call.name, result
                     )
@@ -451,7 +469,7 @@ class AgentLoop:
                 "without completing the task. You can try breaking the task into smaller steps."
             )
 
-        return final_content, tools_used, messages
+        return final_content, tools_used, messages, collected_media
 
     async def run(self) -> None:
         """Run the agent loop, dispatching messages as tasks to stay responsive to /stop."""
@@ -589,7 +607,7 @@ class AgentLoop:
                 channel=channel,
                 chat_id=chat_id,
             )
-            final_content, _, all_msgs = await self._run_agent_loop(messages)
+            final_content, _, all_msgs, _ = await self._run_agent_loop(messages)
             prev_count = len(session.messages)
             self._save_turn(session, all_msgs, 1 + len(history))
             new_msgs = session.messages[prev_count:]
@@ -712,7 +730,7 @@ class AgentLoop:
                 )
             )
 
-        final_content, _, all_msgs = await self._run_agent_loop(
+        final_content, _, all_msgs, tool_media = await self._run_agent_loop(
             initial_messages,
             on_progress=on_progress or _bus_progress,
         )
@@ -756,12 +774,24 @@ class AgentLoop:
                 else:
                     final_content = mirrored
 
+        # Also extract media from final response text
+        if final_content:
+            tool_media.extend(self._extract_media_from_text(final_content))
+        # Deduplicate while preserving order
+        seen: set[str] = set()
+        unique_media: list[str] = []
+        for p in tool_media:
+            if p not in seen:
+                seen.add(p)
+                unique_media.append(p)
+
         preview = final_content[:120] + "..." if len(final_content) > 120 else final_content
         logger.info("Response to {}:{}: {}", msg.channel, msg.sender_id, preview)
         return OutboundMessage(
             channel=msg.channel,
             chat_id=msg.chat_id,
             content=final_content,
+            media=unique_media,
             metadata=msg.metadata or {},
         )
 
