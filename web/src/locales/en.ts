@@ -102,6 +102,16 @@ const en = {
     failedSave: 'Failed to save',
     testConnection: 'Test Connection',
     saveApply: 'Save & Apply',
+    wechatGenerateQr: 'Generate QR Code',
+    wechatCheckScan: 'I have scanned',
+    wechatRefreshQr: 'Refresh QR',
+    wechatRetry: 'Retry',
+    wechatLoginSuccess: 'WeChat login successful! Restart gateway to activate.',
+    wechatScanned: 'Scanned, please confirm on WeChat...',
+    wechatExpired: 'QR code expired, please refresh',
+    wechatNotScanned: 'Not scanned yet, please scan with WeChat',
+    wechatQrFailed: 'Failed to generate QR code',
+    wechatPollFailed: 'Failed to check status',
   },
 
   // Providers

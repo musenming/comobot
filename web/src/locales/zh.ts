@@ -104,6 +104,16 @@ const zh: LocaleMessages = {
     failedSave: '保存失败',
     testConnection: '测试连接',
     saveApply: '保存并应用',
+    wechatGenerateQr: '生成登录二维码',
+    wechatCheckScan: '我已扫码',
+    wechatRefreshQr: '刷新二维码',
+    wechatRetry: '重试',
+    wechatLoginSuccess: '微信登录成功！重启网关后生效。',
+    wechatScanned: '已扫码，请在微信上确认...',
+    wechatExpired: '二维码已过期，请刷新',
+    wechatNotScanned: '尚未扫码，请用微信扫描',
+    wechatQrFailed: '生成二维码失败',
+    wechatPollFailed: '查询状态失败',
   },
 
   // Providers
