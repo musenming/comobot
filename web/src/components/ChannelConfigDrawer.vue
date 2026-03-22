@@ -64,8 +64,9 @@ async function pollWechatStatus() {
     if (data.status === 'confirmed') {
       wechatStatus.value = 'confirmed'
       wechatMessage.value = t('channels.wechatLoginSuccess')
-      // Reload channels list
       emit('saved')
+      message.success(t('channels.saveRestart'))
+      restartGateway()
     } else if (data.status === 'scanned') {
       wechatStatus.value = 'scanned'
       wechatMessage.value = t('channels.wechatScanned')
