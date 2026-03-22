@@ -165,6 +165,7 @@ async def test_web_channel_skips_broadcast() -> None:
                 {"role": "user", "content": "hello"},
                 {"role": "assistant", "content": "test response"},
             ],
+            [],
         )
     )
 
@@ -205,6 +206,7 @@ async def test_external_channel_does_broadcast() -> None:
                 {"role": "user", "content": "hi"},
                 {"role": "assistant", "content": "response"},
             ],
+            [],
         )
     )
 

@@ -26,7 +26,7 @@ def _make_session(message_count: int = 30, memory_window: int = 50):
     return session
 
 
-def _make_tool_response(history_entry, memory_update):
+def _make_tool_response(daily_entry, memory_update):
     """Create an LLMResponse with a save_memory tool call."""
     return LLMResponse(
         content=None,
@@ -35,7 +35,7 @@ def _make_tool_response(history_entry, memory_update):
                 id="call_1",
                 name="save_memory",
                 arguments={
-                    "history_entry": history_entry,
+                    "daily_entry": daily_entry,
                     "memory_update": memory_update,
                 },
             )
@@ -53,7 +53,7 @@ class TestMemoryConsolidationTypeHandling:
         provider = AsyncMock()
         provider.chat = AsyncMock(
             return_value=_make_tool_response(
-                history_entry="[2026-01-01] User discussed testing.",
+                daily_entry="User discussed testing.",
                 memory_update="# Memory\nUser likes testing.",
             )
         )
@@ -62,8 +62,10 @@ class TestMemoryConsolidationTypeHandling:
         result = await store.consolidate(session, provider, "test-model", memory_window=50)
 
         assert result is True
-        assert store.history_file.exists()
-        assert "[2026-01-01] User discussed testing." in store.history_file.read_text()
+        # Consolidation writes to daily log (YYYY-MM-DD.md), not HISTORY.md
+        daily_log = store._daily_log_path()
+        assert daily_log.exists()
+        assert "User discussed testing." in daily_log.read_text()
         assert "User likes testing." in store.memory_file.read_text()
 
     @pytest.mark.asyncio
@@ -73,7 +75,7 @@ class TestMemoryConsolidationTypeHandling:
         provider = AsyncMock()
         provider.chat = AsyncMock(
             return_value=_make_tool_response(
-                history_entry={"timestamp": "2026-01-01", "summary": "User discussed testing."},
+                daily_entry={"timestamp": "2026-01-01", "summary": "User discussed testing."},
                 memory_update={"facts": ["User likes testing"], "topics": ["testing"]},
             )
         )
@@ -82,10 +84,10 @@ class TestMemoryConsolidationTypeHandling:
         result = await store.consolidate(session, provider, "test-model", memory_window=50)
 
         assert result is True
-        assert store.history_file.exists()
-        history_content = store.history_file.read_text()
-        parsed = json.loads(history_content.strip())
-        assert parsed["summary"] == "User discussed testing."
+        daily_log = store._daily_log_path()
+        assert daily_log.exists()
+        daily_content = daily_log.read_text()
+        assert "User discussed testing." in daily_content
 
         memory_content = store.memory_file.read_text()
         parsed_mem = json.loads(memory_content)
@@ -106,7 +108,7 @@ class TestMemoryConsolidationTypeHandling:
                     name="save_memory",
                     arguments=json.dumps(
                         {
-                            "history_entry": "[2026-01-01] User discussed testing.",
+                            "daily_entry": "User discussed testing.",
                             "memory_update": "# Memory\nUser likes testing.",
                         }
                     ),
@@ -119,7 +121,8 @@ class TestMemoryConsolidationTypeHandling:
         result = await store.consolidate(session, provider, "test-model", memory_window=50)
 
         assert result is True
-        assert "User discussed testing." in store.history_file.read_text()
+        daily_log = store._daily_log_path()
+        assert "User discussed testing." in daily_log.read_text()
 
     @pytest.mark.asyncio
     async def test_no_tool_call_returns_false(self, tmp_path: Path) -> None:

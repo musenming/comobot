@@ -9,5 +9,5 @@ import os as _os
 # without a proxy).  Must be set before ``import litellm`` anywhere.
 _os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
 
-__version__ = "0.2.0"
+__version__ = "0.2.4"
 __logo__ = "🤖"

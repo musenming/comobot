@@ -1645,11 +1645,12 @@ def _fetch_latest_version() -> str | None:
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = _json.loads(resp.read())
         return data.get("tag_name", "").lstrip("v")
-    except Exception:
+    except Exception as exc:
+        console.print(f"  [dim]Debug: {type(exc).__name__}: {exc}[/dim]")
         return None
 
 
-def _update_binary() -> None:
+def _update_binary(version: str) -> None:
     """Update binary installation by downloading the latest release."""
     import platform
     import tarfile
@@ -1684,14 +1685,6 @@ def _update_binary() -> None:
 
     target = f"{plat}-{arch}"
     console.print(f"  Platform: [cyan]{target}[/cyan]")
-
-    # Fetch latest version
-    version = _fetch_latest_version()
-    if not version:
-        console.print("[red]Failed to fetch latest version from GitHub.[/red]")
-        raise typer.Exit(1)
-
-    console.print(f"  Latest:   [cyan]v{version}[/cyan]")
 
     if plat == "windows":
         asset_name = f"comobot-{version}-{target}.zip"
@@ -1785,13 +1778,17 @@ def update(
 
     # Check latest version
     latest = _fetch_latest_version()
-    if latest:
-        console.print(f"  Latest:   [cyan]v{latest}[/cyan]")
-        if latest == __version__:
-            console.print("\n[green]You are already on the latest version.[/green]")
-            return
-    else:
-        console.print("  Latest:   [yellow]unknown (could not reach GitHub)[/yellow]")
+    if not latest:
+        console.print(
+            "  Latest:   [red]unknown (could not reach GitHub)[/red]\n"
+            "\n[red]Cannot update without knowing the latest version.[/red]"
+        )
+        raise typer.Exit(1)
+
+    console.print(f"  Latest:   [cyan]v{latest}[/cyan]")
+    if latest == __version__:
+        console.print("\n[green]You are already on the latest version.[/green]")
+        return
 
     console.print()
 
@@ -1805,7 +1802,7 @@ def update(
     console.print()
 
     if method == "binary":
-        _update_binary()
+        _update_binary(latest)
     elif method == "pip":
         _update_pip()
     elif method == "docker":
