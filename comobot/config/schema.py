@@ -200,6 +200,14 @@ class QQConfig(Base):
     )  # Allowed user openids (empty = public access)
 
 
+class WechatConfig(Base):
+    """WeChat channel configuration via Tencent iLink API."""
+
+    enabled: bool = False
+    base_url: str = "https://ilinkai.weixin.qq.com"
+    allow_from: list[str] = Field(default_factory=list)
+
+
 class ChannelsConfig(Base):
     """Configuration for chat channels."""
 
@@ -214,6 +222,7 @@ class ChannelsConfig(Base):
     email: EmailConfig = Field(default_factory=EmailConfig)
     slack: SlackConfig = Field(default_factory=SlackConfig)
     qq: QQConfig = Field(default_factory=QQConfig)
+    wechat: WechatConfig = Field(default_factory=WechatConfig)
     matrix: MatrixConfig = Field(default_factory=MatrixConfig)
 
 

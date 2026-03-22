@@ -33,6 +33,7 @@ class ChannelManager:
         "email": ("comobot.channels.email", "EmailChannel"),
         "slack": ("comobot.channels.slack", "SlackChannel"),
         "qq": ("comobot.channels.qq", "QQChannel"),
+        "wechat": ("comobot.channels.wechat", "WechatChannel"),
         "matrix": ("comobot.channels.matrix", "MatrixChannel"),
     }
 
@@ -154,6 +155,7 @@ class ChannelManager:
                         continue
 
                 channel = self.channels.get(msg.channel)
+                logger.debug("Dispatching to channel={}, chat_id={}", msg.channel, msg.chat_id)
                 if channel:
                     try:
                         await channel.send(msg)

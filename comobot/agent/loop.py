@@ -27,6 +27,7 @@ from comobot.agent.tools.registry import ToolRegistry
 from comobot.agent.tools.shell import ExecTool
 from comobot.agent.tools.spawn import SpawnTool
 from comobot.agent.tools.web import WebFetchTool, WebSearchTool
+from comobot.agent.tools.wechat_login import WechatLoginTool
 from comobot.bus.events import InboundMessage, OutboundMessage
 from comobot.bus.queue import MessageBus
 from comobot.providers.base import LLMProvider
@@ -292,6 +293,7 @@ class AgentLoop:
         self.tools.register(WebSearchTool(api_key=self.brave_api_key, proxy=self.web_proxy))
         self.tools.register(WebFetchTool(proxy=self.web_proxy))
         self.tools.register(MessageTool(send_callback=self.bus.publish_outbound))
+        self.tools.register(WechatLoginTool())
         self.tools.register(SpawnTool(manager=self.subagents))
         if self.cron_service:
             self.tools.register(CronTool(self.cron_service))

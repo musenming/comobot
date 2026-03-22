@@ -1,6 +1,7 @@
 """CLI commands for comobot."""
 
 import asyncio
+import io
 import os
 import select
 import signal
@@ -1093,6 +1094,12 @@ def channels_status():
     qq_config = f"app_id: {qq.app_id[:10]}..." if qq.app_id else "[dim]not configured[/dim]"
     table.add_row("QQ", "✓" if qq.enabled else "✗", qq_config)
 
+    # WeChat
+    wc = config.channels.wechat
+    wc_cred = Path.home() / ".comobot" / "wechat-auth" / "credentials.json"
+    wc_status = "logged in" if wc_cred.exists() else "[dim]not logged in[/dim]"
+    table.add_row("WeChat", "✓" if wc.enabled else "✗", wc_status)
+
     # Email
     em = config.channels.email
     em_config = em.imap_host if em.imap_host else "[dim]not configured[/dim]"
@@ -1159,9 +1166,220 @@ def _get_bridge_dir() -> Path:
     return user_bridge
 
 
+def _try_display_img_content(raw: str) -> bool:
+    """Try to decode qrcode_img_content and display QR in terminal. Returns True if successful."""
+    import base64
+
+    # Try base64 decode → image → pyzbar decode → terminal QR
+    for decode_fn in (base64.b64decode, base64.urlsafe_b64decode):
+        try:
+            img_data = decode_fn(raw)
+            if len(img_data) < 100:
+                continue  # Too small to be an image
+            # Check for known image headers
+            if img_data[:4] not in (b"\x89PNG", b"\xff\xd8\xff", b"GIF8"):
+                continue
+            from PIL import Image
+            from pyzbar.pyzbar import decode as decode_qr
+
+            img = Image.open(io.BytesIO(img_data))
+            results = decode_qr(img)
+            if results:
+                qr_url = results[0].data.decode()
+                console.print(f"[dim]QR content: {qr_url}[/dim]\n")
+                import qrcode as qr_lib
+
+                qr = qr_lib.QRCode(border=1)
+                qr.add_data(qr_url)
+                qr.make(fit=True)
+                qr.print_ascii(invert=True)
+                return True
+        except Exception:
+            continue
+
+    # qrcode_img_content might itself be a URL or scannable string
+    if raw.startswith(("http://", "https://")):
+        try:
+            import qrcode as qr_lib
+
+            console.print(f"[dim]QR URL: {raw}[/dim]\n")
+            qr = qr_lib.QRCode(border=1)
+            qr.add_data(raw)
+            qr.make(fit=True)
+            qr.print_ascii(invert=True)
+            return True
+        except Exception:
+            pass
+
+    return False
+
+
+def _wechat_login() -> None:
+    """WeChat login via iLink QR code scan."""
+    import base64
+    import json
+    import random
+    import time
+
+    import httpx
+
+    from comobot.config.loader import load_config
+
+    config = load_config()
+    base_url = config.channels.wechat.base_url.rstrip("/")
+    uin = base64.b64encode(str(random.randint(0, 2**32 - 1)).encode()).decode()
+
+    console.print(f"{__logo__} WeChat Login via iLink API\n")
+
+    # Step 1: Get QR code
+    console.print("Fetching QR code...")
+    try:
+        with httpx.Client(timeout=30) as client:
+            resp = client.get(
+                f"{base_url}/ilink/bot/get_bot_qrcode",
+                params={"bot_type": "3"},
+                headers={"X-WECHAT-UIN": uin},
+            )
+            data = resp.json()
+    except Exception as e:
+        console.print(f"[red]Failed to fetch QR code: {e}[/red]")
+        return
+
+    qrcode_token = data.get("qrcode", "")
+    qrcode_img_raw = data.get("qrcode_img_content", "")
+
+    if not qrcode_token:
+        console.print(f"[red]No QR code in response: {data}[/red]")
+        return
+
+    # Debug: inspect qrcode_img_content to understand its format
+    if qrcode_img_raw:
+        console.print(
+            f"[dim]qrcode_img_content: type={type(qrcode_img_raw).__name__}, "
+            f"len={len(qrcode_img_raw)}, preview={str(qrcode_img_raw)[:120]}[/dim]"
+        )
+
+    # Try to extract a scannable URL/image from qrcode_img_content
+    qr_displayed = False
+    if qrcode_img_raw:
+        qr_displayed = _try_display_img_content(qrcode_img_raw)
+
+    # Fallback: generate terminal QR from the token directly.
+    # WeChat's scanner may recognize the raw token as an iLink login code.
+    if not qr_displayed:
+        try:
+            import qrcode as qr_lib
+
+            qr = qr_lib.QRCode(border=1)
+            qr.add_data(qrcode_token)
+            qr.make(fit=True)
+            qr.print_ascii(invert=True)
+            console.print(f"\n[dim]QR content: {qrcode_token}[/dim]")
+        except ImportError:
+            console.print(f"QR token: [bold]{qrcode_token}[/bold]")
+            console.print("[dim]pip install qrcode for terminal QR display[/dim]")
+
+    console.print("\nWaiting for scan...")
+
+    # Step 2: Poll for QR code status
+    qrcode_param = qrcode_token
+    try:
+        with httpx.Client(timeout=45) as client:
+            for _ in range(30):  # ~20 min max
+                try:
+                    resp = client.get(
+                        f"{base_url}/ilink/bot/get_qrcode_status",
+                        params={"qrcode": qrcode_param},
+                        headers={"X-WECHAT-UIN": uin},
+                        timeout=45,
+                    )
+                    status_data = resp.json()
+                except httpx.ReadTimeout:
+                    continue
+
+                status = status_data.get("status", "")
+                if status == "confirmed":
+                    bot_token = status_data.get("bot_token", "")
+                    bot_id = status_data.get("bot_id", "")
+                    user_id = status_data.get("user_id", "")
+
+                    if not bot_token:
+                        console.print("[red]Login confirmed but no bot_token received.[/red]")
+                        return
+
+                    # Save credentials
+                    auth_dir = Path.home() / ".comobot" / "wechat-auth"
+                    auth_dir.mkdir(parents=True, exist_ok=True)
+                    creds = {
+                        "token": bot_token,
+                        "base_url": base_url,
+                        "bot_id": bot_id,
+                        "user_id": user_id,
+                        "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    }
+                    (auth_dir / "credentials.json").write_text(
+                        json.dumps(creds, indent=2, ensure_ascii=False)
+                    )
+
+                    console.print("\n[green]✓ WeChat login successful![/green]")
+                    console.print(f"  Bot ID: {bot_id}")
+                    console.print(f"  Credentials saved to: {auth_dir / 'credentials.json'}")
+
+                    # Auto-enable WeChat in config
+                    from comobot.config.loader import load_config, save_config
+
+                    config = load_config()
+                    if not config.channels.wechat.enabled:
+                        config.channels.wechat.enabled = True
+                        if not config.channels.wechat.allow_from:
+                            config.channels.wechat.allow_from = ["*"]
+                        save_config(config)
+                        console.print("[green]✓ WeChat enabled in config.[/green]")
+                    else:
+                        console.print("[dim]WeChat already enabled in config.[/dim]")
+
+                    # Restart gateway if running
+                    port = config.gateway.port if hasattr(config.gateway, "port") else 18790
+                    try:
+                        result = subprocess.run(
+                            ["lsof", "-ti", f"tcp:{port}"],
+                            capture_output=True,
+                            text=True,
+                        )
+                        if result.stdout.strip():
+                            console.print("[yellow]Restarting gateway...[/yellow]")
+                            restart(port=port)
+                        else:
+                            console.print(
+                                "[dim]Gateway not running. Start with: comobot gateway[/dim]"
+                            )
+                    except FileNotFoundError:
+                        console.print("[dim]Gateway not running. Start with: comobot gateway[/dim]")
+                    return
+
+                if status == "expired":
+                    console.print("[red]QR code expired. Please try again.[/red]")
+                    return
+
+                if status == "scanned":
+                    console.print("Scanned! Waiting for confirmation...")
+
+                time.sleep(1)
+
+        console.print("[red]Timed out waiting for scan.[/red]")
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Login cancelled.[/yellow]")
+
+
 @channels_app.command("login")
-def channels_login():
+def channels_login(
+    channel: str = typer.Argument("whatsapp", help="Channel to login (whatsapp, wechat)"),
+):
     """Link device via QR code."""
+    if channel == "wechat":
+        _wechat_login()
+        return
+
     import subprocess
 
     from comobot.config.loader import load_config
