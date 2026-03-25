@@ -123,6 +123,9 @@ class AgentLoop:
             weakref.WeakValueDictionary()
         )
         self._memory_flushed: set[str] = set()  # Session keys that have been flushed this cycle
+
+        # Intervention hooks for Comobot Remote "descend" mode
+        self._intervention_callbacks: dict[str, asyncio.Future] = {}
         self.orchestrator = None  # Optional WorkflowEngine for orchestrated flows
         self._db_session_manager = None  # Optional SQLiteSessionManager for DB sync
 
@@ -883,6 +886,37 @@ class AgentLoop:
             archive_all=archive_all,
             memory_window=self.memory_window,
         )
+
+    # --- Intervention API for Comobot Remote "descend" mode ---
+
+    async def request_intervention(
+        self, session_key: str, draft: str, timeout: float = 30.0
+    ) -> tuple[str, str]:
+        """Request mobile intervention for a draft response.
+
+        Returns (action, content) where action is 'approve', 'edit', or 'reject'.
+        Times out after `timeout` seconds and auto-approves.
+        """
+        loop = asyncio.get_event_loop()
+        future = loop.create_future()
+        self._intervention_callbacks[session_key] = future
+        try:
+            action, content = await asyncio.wait_for(future, timeout=timeout)
+            return action, content
+        except asyncio.TimeoutError:
+            logger.debug("Intervention timed out for {}, auto-approving", session_key)
+            return "approve", draft
+        finally:
+            self._intervention_callbacks.pop(session_key, None)
+
+    def register_intervention_response(
+        self, session_key: str, action: str, content: str
+    ) -> None:
+        """Called by WS handler when mobile sends an intervention response."""
+        future = self._intervention_callbacks.get(session_key)
+        if future and not future.done():
+            future.set_result((action, content))
+            logger.debug("Intervention response for {}: {}", session_key, action)
 
     async def process_direct(
         self,

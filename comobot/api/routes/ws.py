@@ -20,6 +20,8 @@ class ConnectionManager:
         self.session_connections: list[WebSocket] = []
         # Chat connections keyed by session_key
         self.chat_connections: dict[str, list[WebSocket]] = {}
+        # Reference to RemoteConnectionManager (set during app init)
+        self.remote_manager = None
 
     async def connect_logs(self, ws: WebSocket):
         await ws.accept()
@@ -107,6 +109,10 @@ class ConnectionManager:
                 disconnected.append(ws)
         for ws in disconnected:
             self.disconnect_sessions(ws)
+        # Also forward to subscribed remote devices
+        session_key = event.get("session_key")
+        if session_key:
+            await self._broadcast_to_remote(session_key, event)
 
     async def broadcast_chat(self, session_key: str, data: dict):
         """Send a message to all chat WebSocket clients for a given session."""
@@ -119,6 +125,20 @@ class ConnectionManager:
                 disconnected.append(ws)
         for ws in disconnected:
             self.unregister_chat(ws)
+        # Also forward to subscribed remote devices
+        await self._broadcast_to_remote(session_key, data)
+
+    async def _broadcast_to_remote(self, session_key: str, data: dict) -> None:
+        """Forward session events to mobile devices subscribed to this session."""
+        if self.remote_manager:
+            try:
+                await self.remote_manager.broadcast_to_subscribers(session_key, {
+                    "t": "new-message",
+                    "sid": session_key,
+                    "message": data,
+                })
+            except Exception:
+                pass  # Don't let remote failures affect web clients
 
 
 manager = ConnectionManager()

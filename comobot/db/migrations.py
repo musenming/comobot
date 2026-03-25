@@ -151,6 +151,50 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         CREATE INDEX IF NOT EXISTS idx_sessions_platform ON sessions(platform);
         """,
     ),
+    (
+        4,
+        "add_remote_tables",
+        """
+        CREATE TABLE IF NOT EXISTS remote_devices (
+            id                TEXT PRIMARY KEY,
+            device_name       TEXT NOT NULL,
+            device_os         TEXT NOT NULL,
+            device_public_key TEXT NOT NULL,
+            server_public_key TEXT NOT NULL,
+            server_secret_key TEXT NOT NULL,
+            push_token        TEXT,
+            paired_at         TEXT DEFAULT (datetime('now')),
+            last_seen_at      TEXT DEFAULT (datetime('now')),
+            is_active         INTEGER DEFAULT 1
+        );
+
+        CREATE TABLE IF NOT EXISTS voice_intents (
+            id          TEXT PRIMARY KEY,
+            device_id   TEXT REFERENCES remote_devices(id),
+            transcript  TEXT NOT NULL,
+            intent      TEXT,
+            confidence  REAL DEFAULT 0,
+            status      TEXT DEFAULT 'pending',
+            agent_id    TEXT,
+            session_key TEXT,
+            result      TEXT,
+            error       TEXT,
+            created_at  TEXT DEFAULT (datetime('now')),
+            updated_at  TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_voice_intents_device ON voice_intents(device_id);
+        CREATE INDEX IF NOT EXISTS idx_voice_intents_status ON voice_intents(status);
+
+        CREATE TABLE IF NOT EXISTS pairing_tokens (
+            token             TEXT PRIMARY KEY,
+            server_public_key TEXT NOT NULL,
+            server_secret_key TEXT NOT NULL,
+            created_at        TEXT DEFAULT (datetime('now')),
+            expires_at        TEXT NOT NULL,
+            used              INTEGER DEFAULT 0
+        );
+        """,
+    ),
 ]
 
 

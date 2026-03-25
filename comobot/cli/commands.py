@@ -851,6 +851,250 @@ def restart(
 
 
 # ============================================================================
+# Connect Commands
+# ============================================================================
+
+connect_app = typer.Typer(help="Connect external devices and services")
+app.add_typer(connect_app, name="connect")
+
+
+@connect_app.command("remote")
+def connect_remote(
+    port: int = typer.Option(18790, "--port", "-p", help="Gateway port to connect to"),
+    server_url: str = typer.Option(
+        "",
+        "--url",
+        "-u",
+        help="Public server URL (e.g. https://your-domain.com). Auto-detected if omitted.",
+    ),
+    poll: bool = typer.Option(True, "--poll/--no-poll", help="Poll for pairing confirmation"),
+):
+    """Generate a QR code to pair Comobot Remote app."""
+    import json
+    import time
+
+    from loguru import logger
+
+    from comobot.config.loader import get_data_dir, load_config
+
+    config = load_config()
+    gw_port = config.gateway.port if port == 18790 else port
+
+    # Determine server URL for QR code
+    if not server_url:
+        # Auto-detect: try to find LAN IP for mobile access
+        server_url = _detect_server_url(gw_port)
+
+    console.print(f"\n{__logo__} Comobot Remote Pairing\n")
+
+    async def _pair():
+        from comobot.db.connection import Database
+        from comobot.db.migrations import run_migrations
+        from comobot.security.auth import AuthManager
+
+        db_path = get_data_dir() / "comobot.db"
+        db = Database(db_path)
+        await db.connect()
+        await run_migrations(db)
+
+        auth = AuthManager(db)
+        await auth.ensure_jwt_secret()
+
+        from comobot.api.remote.device_manager import DeviceManager
+
+        dm = DeviceManager(db, auth)
+
+        try:
+            result = await dm.create_pairing_token(server_url=server_url)
+        except Exception as e:
+            console.print(f"[red]Failed to create pairing token: {e}[/red]")
+            await db.close()
+            return
+
+        qr_data = json.loads(result["qr_data"])
+        qr_json = json.dumps(qr_data, separators=(",", ":"))
+        expires = result["expires_at"]
+
+        # Display QR code in terminal
+        try:
+            import qrcode as qr_lib
+
+            qr = qr_lib.QRCode(border=1, error_correction=qr_lib.constants.ERROR_CORRECT_L)
+            qr.add_data(qr_json)
+            qr.make(fit=True)
+            console.print()
+            qr.print_ascii(invert=True)
+        except ImportError:
+            console.print(f"[yellow]QR data (scan with app):[/yellow]\n{qr_json}")
+            console.print("[dim]Install qrcode for terminal QR display: pip install qrcode[/dim]")
+
+        console.print(f"\n[dim]Server:  {server_url}[/dim]")
+        console.print(f"[dim]Token:   {result['qr_token'][:16]}...[/dim]")
+        console.print(f"[dim]Expires: {expires}[/dim]")
+        console.print("\n[cyan]Open Comobot Remote app → Scan to Connect[/cyan]\n")
+
+        if not poll:
+            await db.close()
+            return
+
+        # Poll for pairing confirmation (check if token gets used)
+        console.print("[dim]Waiting for device to scan... (Ctrl+C to cancel)[/dim]")
+        token = result["qr_token"]
+        try:
+            for _ in range(60):  # 5 minutes max (5s intervals)
+                time.sleep(5)
+                row = await db.fetchone(
+                    "SELECT used FROM pairing_tokens WHERE token = ?", (token,)
+                )
+                if row and row["used"]:
+                    # Find the device that just paired
+                    device = await db.fetchone(
+                        "SELECT id, device_name, device_os FROM remote_devices "
+                        "WHERE server_public_key = ? ORDER BY paired_at DESC LIMIT 1",
+                        (result["server_public_key"],),
+                    )
+                    if device:
+                        console.print(
+                            f"\n[green]✓ Device paired![/green]  "
+                            f"{device['device_name']} ({device['device_os']})  "
+                            f"id={device['id'][:8]}..."
+                        )
+                    else:
+                        console.print("\n[green]✓ Pairing token used![/green]")
+                    break
+            else:
+                console.print("\n[yellow]Pairing token expired. Run the command again to retry.[/yellow]")
+        except KeyboardInterrupt:
+            console.print("\n[dim]Cancelled.[/dim]")
+
+        await db.close()
+
+    asyncio.run(_pair())
+
+
+@connect_app.command("list")
+def connect_list():
+    """List all paired remote devices."""
+
+    async def _list():
+        from comobot.config.loader import get_data_dir
+        from comobot.db.connection import Database
+        from comobot.db.migrations import run_migrations
+        from comobot.security.auth import AuthManager
+
+        db_path = get_data_dir() / "comobot.db"
+        db = Database(db_path)
+        await db.connect()
+        await run_migrations(db)
+
+        auth = AuthManager(db)
+        await auth.ensure_jwt_secret()
+
+        from comobot.api.remote.device_manager import DeviceManager
+
+        dm = DeviceManager(db, auth)
+        devices = await dm.list_devices()
+        await db.close()
+
+        if not devices:
+            console.print("[dim]No paired devices.[/dim]")
+            return
+
+        table = Table(title="Paired Remote Devices")
+        table.add_column("ID", style="dim", max_width=12)
+        table.add_column("Name")
+        table.add_column("OS")
+        table.add_column("Paired At")
+        table.add_column("Last Seen")
+        table.add_column("Active")
+
+        for d in devices:
+            active = "[green]✓[/green]" if d["is_active"] else "[red]✗[/red]"
+            table.add_row(
+                d["id"][:12],
+                d["device_name"],
+                d["device_os"],
+                d["paired_at"] or "-",
+                d["last_seen_at"] or "-",
+                active,
+            )
+        console.print(table)
+
+    asyncio.run(_list())
+
+
+@connect_app.command("remove")
+def connect_remove(
+    device_id: str = typer.Argument(help="Device ID (or prefix) to remove"),
+):
+    """Remove (deactivate) a paired remote device."""
+
+    async def _remove():
+        from comobot.config.loader import get_data_dir
+        from comobot.db.connection import Database
+        from comobot.db.migrations import run_migrations
+        from comobot.security.auth import AuthManager
+
+        db_path = get_data_dir() / "comobot.db"
+        db = Database(db_path)
+        await db.connect()
+        await run_migrations(db)
+
+        auth = AuthManager(db)
+        await auth.ensure_jwt_secret()
+
+        from comobot.api.remote.device_manager import DeviceManager
+
+        dm = DeviceManager(db, auth)
+
+        # Support prefix matching
+        devices = await dm.list_devices()
+        matches = [d for d in devices if d["id"].startswith(device_id) and d["is_active"]]
+
+        if not matches:
+            console.print(f"[red]No active device found matching '{device_id}'[/red]")
+            await db.close()
+            return
+
+        if len(matches) > 1:
+            console.print(f"[yellow]Multiple devices match '{device_id}'. Be more specific:[/yellow]")
+            for d in matches:
+                console.print(f"  {d['id'][:12]}  {d['device_name']} ({d['device_os']})")
+            await db.close()
+            return
+
+        target = matches[0]
+        removed = await dm.remove_device(target["id"])
+        await db.close()
+
+        if removed:
+            console.print(
+                f"[green]✓[/green] Removed {target['device_name']} ({target['device_os']}) "
+                f"id={target['id'][:12]}"
+            )
+        else:
+            console.print("[red]Failed to remove device.[/red]")
+
+    asyncio.run(_remove())
+
+
+def _detect_server_url(port: int) -> str:
+    """Auto-detect the best server URL for mobile pairing (prefer LAN IP)."""
+    import socket
+
+    try:
+        # Create a UDP socket to determine the outbound LAN IP
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(0.5)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return f"http://{ip}:{port}"
+    except Exception:
+        return f"http://localhost:{port}"
+
+
+# ============================================================================
 # Agent Commands
 # ============================================================================
 

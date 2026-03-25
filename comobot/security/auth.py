@@ -13,6 +13,8 @@ from comobot.db.connection import Database
 
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_HOURS = 24
+DEVICE_TOKEN_EXPIRE_HOURS = 1
+REFRESH_TOKEN_EXPIRE_DAYS = 30
 
 
 class AuthManager:
@@ -68,3 +70,31 @@ class AuthManager:
             (hashed, username),
         )
         return cursor.rowcount > 0
+
+    # --- Device token methods for Comobot Remote ---
+
+    def create_device_token(self, device_id: str, username: str = "remote") -> str:
+        """Create a short-lived JWT for a paired mobile device (1 hour)."""
+        expire = datetime.utcnow() + timedelta(hours=DEVICE_TOKEN_EXPIRE_HOURS)
+        payload = {"sub": username, "device_id": device_id, "type": "device", "exp": expire}
+        return jwt.encode(payload, self._secret, algorithm=ALGORITHM)
+
+    def create_refresh_token(self, device_id: str) -> str:
+        """Create a long-lived refresh token for a mobile device (30 days)."""
+        expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        payload = {"device_id": device_id, "type": "refresh", "exp": expire}
+        return jwt.encode(payload, self._secret, algorithm=ALGORITHM)
+
+    def verify_device_token(self, token: str) -> dict | None:
+        """Verify a device JWT and return payload {sub, device_id, type}, or None."""
+        try:
+            payload = jwt.decode(token, self._secret, algorithms=[ALGORITHM])
+            if payload.get("type") not in ("device", "refresh"):
+                return None
+            return {
+                "sub": payload.get("sub"),
+                "device_id": payload.get("device_id"),
+                "type": payload.get("type"),
+            }
+        except JWTError:
+            return None

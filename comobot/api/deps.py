@@ -55,3 +55,36 @@ async def get_current_user(
             detail="Invalid or expired token",
         )
     return username
+
+
+def get_device_manager(request: Request):
+    """Get DeviceManager from app state."""
+    from comobot.api.remote.device_manager import DeviceManager
+
+    dm: DeviceManager | None = getattr(request.app.state, "device_manager", None)
+    if dm is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Device manager not available",
+        )
+    return dm
+
+
+async def get_current_device(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> dict:
+    """Verify device JWT token and return device info. For remote endpoints."""
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+    auth: AuthManager = request.app.state.auth
+    payload = auth.verify_device_token(credentials.credentials)
+    if not payload or payload.get("type") != "device":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired device token",
+        )
+    return payload

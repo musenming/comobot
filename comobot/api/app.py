@@ -48,6 +48,14 @@ def create_app(
     for key, value in kwargs.items():
         setattr(app.state, key, value)
 
+    # Initialize Comobot Remote services
+    if auth:
+        from comobot.api.remote.device_manager import DeviceManager
+        from comobot.api.remote.intent_engine import IntentEngine
+
+        app.state.device_manager = DeviceManager(db=db, auth=auth)
+        app.state.intent_engine = IntentEngine(db=db)
+
     # Register routes
     from comobot.api.routes.auth import router as auth_router
     from comobot.api.routes.channels import router as channels_router
@@ -65,7 +73,10 @@ def create_app(
     from comobot.api.routes.skills import router as skills_router
     from comobot.api.routes.webhook import router as webhook_router
     from comobot.api.routes.workflows import router as workflows_router
+    from comobot.api.routes.agents import router as agents_router
+    from comobot.api.routes.remote import router as remote_router
     from comobot.api.routes.ws import router as ws_router
+    from comobot.api.routes.ws_remote import router as ws_remote_router
 
     app.include_router(health_router)
     app.include_router(auth_router)
@@ -83,7 +94,17 @@ def create_app(
     app.include_router(logs_router)
     app.include_router(settings_router)
     app.include_router(skills_router)
+    app.include_router(agents_router)
+    app.include_router(remote_router)
+    app.include_router(ws_remote_router)
     app.include_router(ws_router)
+
+    # Link remote WS manager to existing ConnectionManager for session bridging
+    from comobot.api.routes.ws import get_ws_manager
+    from comobot.api.routes.ws_remote import get_remote_manager
+
+    ws_mgr = get_ws_manager()
+    ws_mgr.remote_manager = get_remote_manager()
 
     # Serve media files from ~/.comobot/media/
     media_dir = Path.home() / ".comobot" / "media"
