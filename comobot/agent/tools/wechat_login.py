@@ -249,8 +249,8 @@ class WechatLoginTool(Tool):
             channels = data.setdefault("channels", {})
             wechat = channels.setdefault("wechat", {})
             wechat["enabled"] = True
-            if not wechat.get("allow_from"):
-                wechat["allow_from"] = ["*"]
+            if not wechat.get("allowFrom"):
+                wechat["allowFrom"] = ["*"]
 
             _CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
             _CONFIG_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False))
