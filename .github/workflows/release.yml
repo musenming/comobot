@@ -56,14 +56,24 @@ jobs:
           SEP=":"
           if [ "$RUNNER_OS" = "Windows" ]; then SEP=";"; fi
 
+          # Hidden imports needed by pkg_resources -> jaraco.context -> subprocess
+          HIDDEN_SUBPROCESS=""
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            HIDDEN_SUBPROCESS="--hidden-import _winapi"
+          else
+            HIDDEN_SUBPROCESS="--hidden-import _posixsubprocess"
+          fi
+
           pyinstaller comobot/__main__.py \
             --onefile \
             --name comobot \
             --collect-submodules comobot \
+            --collect-submodules qrcode \
             --collect-all certifi \
             --collect-all litellm \
             --collect-all tiktoken \
             --collect-all tiktoken_ext \
+            $HIDDEN_SUBPROCESS \
             --add-data "comobot/templates${SEP}comobot/templates" \
             --add-data "comobot/skills${SEP}comobot/skills" \
             --add-data "web/dist${SEP}web/dist" \

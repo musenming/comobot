@@ -269,9 +269,14 @@ class WechatLoginTool(Tool):
 
     @staticmethod
     def _image_qr(data: str) -> str | None:
-        """Generate QR code as PNG image, save to media dir, return markdown link."""
+        """Generate QR code as SVG image, save to media dir, return markdown link.
+
+        Uses the built-in SVG backend of qrcode so Pillow (PIL) is NOT required.
+        This avoids ModuleNotFoundError when running from PyInstaller binaries.
+        """
         try:
             import qrcode as qr_lib
+            import qrcode.image.svg
 
             qr = qr_lib.QRCode(
                 border=2,
@@ -280,11 +285,11 @@ class WechatLoginTool(Tool):
             )
             qr.add_data(data)
             qr.make(fit=True)
-            img = qr.make_image(fill_color="black", back_color="white")
+            img = qr.make_image(image_factory=qrcode.image.svg.SvgPathImage)
 
             media_dir = Path.home() / ".comobot" / "media"
             media_dir.mkdir(parents=True, exist_ok=True)
-            filename = f"wechat_qr_{int(time.time())}.png"
+            filename = f"wechat_qr_{int(time.time())}.svg"
             filepath = media_dir / filename
             img.save(str(filepath))
 
