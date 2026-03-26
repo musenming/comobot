@@ -56,12 +56,17 @@ jobs:
           SEP=":"
           if [ "$RUNNER_OS" = "Windows" ]; then SEP=";"; fi
 
-          # pkg_resources is NOT used by comobot or its deps at runtime
-          # (litellm uses importlib.resources on Python 3.11+).
-          # Excluding it prevents PyInstaller from injecting the
-          # pyi_rth_pkgres runtime hook, which pulls in subprocess ->
-          # _posixsubprocess (macOS/Linux) / _winapi (Windows) and
-          # crashes the frozen binary.
+          # On macOS, a PyInstaller onefile binary that spawns itself inherits
+          # _PYI_* env vars which break the child's bootloader extraction.
+          # The fix is in the Python code (pyi_clean_env), but we also add
+          # commonly missing C-extension hidden imports as a safety net.
+          PLATFORM_HIDDEN=""
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            PLATFORM_HIDDEN="--hidden-import _winapi"
+          else
+            PLATFORM_HIDDEN="--hidden-import _posixsubprocess --hidden-import _socket"
+          fi
+
           pyinstaller comobot/__main__.py \
             --onefile \
             --name comobot \
@@ -71,7 +76,7 @@ jobs:
             --collect-all litellm \
             --collect-all tiktoken \
             --collect-all tiktoken_ext \
-            --exclude-module pkg_resources \
+            $PLATFORM_HIDDEN \
             --add-data "comobot/templates${SEP}comobot/templates" \
             --add-data "comobot/skills${SEP}comobot/skills" \
             --add-data "web/dist${SEP}web/dist" \

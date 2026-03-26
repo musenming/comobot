@@ -207,11 +207,15 @@ class WechatLoginTool(Tool):
 
         async def _restart():
             await asyncio.sleep(3)  # let the response reach the frontend first
-            comobot_bin = sys.executable.replace("/python", "/comobot")
-            if not Path(comobot_bin).exists():
-                comobot_bin = "comobot"
+            if getattr(sys, "frozen", False):
+                comobot_bin = sys.executable
+            else:
+                comobot_bin = sys.executable.replace("/python", "/comobot")
+                if not Path(comobot_bin).exists():
+                    comobot_bin = "comobot"
             port = int(os.environ.get("COMOBOT_PORT", "18790"))
             cmd = [comobot_bin, "gateway", "--port", str(port)]
+            from comobot.utils.helpers import pyi_clean_env
             from comobot.utils.log_sanitizer import SanitizedFileWriter
 
             log_dir = Path.home() / ".comobot" / "logs"
@@ -223,6 +227,7 @@ class WechatLoginTool(Tool):
                 stderr=lf,
                 stdin=subprocess.DEVNULL,
                 start_new_session=True,
+                env=pyi_clean_env(),
             )
             logger.info("wechat_login: spawned new gateway, terminating current process")
             os.kill(os.getpid(), signal.SIGTERM)

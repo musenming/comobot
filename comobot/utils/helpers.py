@@ -1,6 +1,8 @@
 """Utility functions for comobot."""
 
+import os
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -9,6 +11,41 @@ def ensure_dir(path: Path) -> Path:
     """Ensure directory exists, return it."""
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def pyi_clean_env() -> dict[str, str]:
+    """Return a copy of ``os.environ`` with PyInstaller internal vars removed.
+
+    When a PyInstaller *onefile* binary spawns itself as a subprocess, the
+    child inherits ``_PYI_*`` / ``_MEI*`` environment variables that interfere
+    with the bootloader's temp-directory extraction.  On macOS this causes
+    runtime-hook failures such as::
+
+        ModuleNotFoundError: No module named '_socket'
+
+    Stripping these variables lets the child perform a clean extraction.
+    For non-frozen (``pip install``) environments this simply returns an
+    unmodified copy of ``os.environ``.
+    """
+    env = dict(os.environ)
+    if not getattr(sys, "frozen", False):
+        return env
+
+    # Remove all PyInstaller internal variables
+    for key in list(env):
+        if key.startswith(("_PYI_", "_MEI")):
+            del env[key]
+
+    # Restore original LD_LIBRARY_PATH / DYLD_LIBRARY_PATH if PyInstaller
+    # saved the original value (Linux / macOS).
+    for var in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"):
+        orig = env.pop(f"{var}_ORIG", None)
+        if orig is not None:
+            env[var] = orig
+        elif var in env:
+            del env[var]
+
+    return env
 
 
 def get_data_path() -> Path:

@@ -822,10 +822,12 @@ def restart(
     console.print("[yellow]Starting gateway...[/yellow]")
 
     # Determine the comobot executable path
-    comobot_bin = sys.executable.replace("/python", "/comobot")
-    if not Path(comobot_bin).exists():
-        # Fallback: use sys.argv[0] or search PATH
-        comobot_bin = "comobot"
+    if getattr(sys, "frozen", False):
+        comobot_bin = sys.executable
+    else:
+        comobot_bin = sys.executable.replace("/python", "/comobot")
+        if not Path(comobot_bin).exists():
+            comobot_bin = "comobot"
 
     cmd = [comobot_bin, "gateway", "--port", str(port)]
     if verbose:
@@ -834,6 +836,7 @@ def restart(
     log_file = _get_log_dir() / "gateway.log"
 
     # Start gateway as a detached background process (with sanitized output)
+    from comobot.utils.helpers import pyi_clean_env
     from comobot.utils.log_sanitizer import SanitizedFileWriter
 
     lf = SanitizedFileWriter(str(log_file))
@@ -843,6 +846,7 @@ def restart(
         stderr=lf,
         stdin=subprocess.DEVNULL,
         start_new_session=True,
+        env=pyi_clean_env(),
     )
 
     console.print(f"[green]✓[/green] Gateway started (pid={proc.pid})")

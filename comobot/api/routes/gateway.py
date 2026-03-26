@@ -29,9 +29,12 @@ async def restart_gateway(_user: str = Depends(get_current_user)):
     The new process inherits the same port and options.
     """
     # Determine the comobot executable
-    comobot_bin = sys.executable.replace("/python", "/comobot")
-    if not Path(comobot_bin).exists():
-        comobot_bin = "comobot"
+    if getattr(sys, "frozen", False):
+        comobot_bin = sys.executable
+    else:
+        comobot_bin = sys.executable.replace("/python", "/comobot")
+        if not Path(comobot_bin).exists():
+            comobot_bin = "comobot"
 
     # Read current port from PID-companion or use default
     port = int(os.environ.get("COMOBOT_PORT", "18790"))
@@ -42,6 +45,7 @@ async def restart_gateway(_user: str = Depends(get_current_user)):
     logger.info("Gateway restart requested — spawning new process")
 
     # Start new gateway process (append to existing log, sanitized)
+    from comobot.utils.helpers import pyi_clean_env
     from comobot.utils.log_sanitizer import SanitizedFileWriter
 
     lf = SanitizedFileWriter(str(log_file))
@@ -51,6 +55,7 @@ async def restart_gateway(_user: str = Depends(get_current_user)):
         stderr=lf,
         stdin=subprocess.DEVNULL,
         start_new_session=True,
+        env=pyi_clean_env(),
     )
 
     # Schedule self-termination after response is sent
