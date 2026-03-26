@@ -79,11 +79,14 @@ async def ws_remote(websocket: WebSocket):
     await dm.touch_device(device_id)
 
     # Send welcome message
-    await remote_manager.send_encrypted(device_id, {
-        "t": "welcome",
-        "device_id": device_id,
-        "server_version": "1.0",
-    })
+    await remote_manager.send_encrypted(
+        device_id,
+        {
+            "t": "welcome",
+            "device_id": device_id,
+            "server_version": "1.0",
+        },
+    )
 
     try:
         while True:
@@ -124,25 +127,34 @@ async def _handle_command(app, device_id: str, msg: dict) -> None:
                     (session["id"],),
                 )
                 messages.reverse()
-                await remote_manager.send_encrypted(device_id, {
-                    "t": "subscribed",
-                    "session_key": session_key,
-                    "messages": messages,
-                })
+                await remote_manager.send_encrypted(
+                    device_id,
+                    {
+                        "t": "subscribed",
+                        "session_key": session_key,
+                        "messages": messages,
+                    },
+                )
             else:
-                await remote_manager.send_encrypted(device_id, {
-                    "t": "error",
-                    "detail": f"Session not found: {session_key}",
-                })
+                await remote_manager.send_encrypted(
+                    device_id,
+                    {
+                        "t": "error",
+                        "detail": f"Session not found: {session_key}",
+                    },
+                )
 
     elif cmd == "unsubscribe":
         session_key = msg.get("session_key")
         if session_key:
             remote_manager.unsubscribe(device_id, session_key)
-            await remote_manager.send_encrypted(device_id, {
-                "t": "unsubscribed",
-                "session_key": session_key,
-            })
+            await remote_manager.send_encrypted(
+                device_id,
+                {
+                    "t": "unsubscribed",
+                    "session_key": session_key,
+                },
+            )
 
     elif cmd == "send_message":
         session_key = msg.get("session_key")
@@ -153,21 +165,29 @@ async def _handle_command(app, device_id: str, msg: dict) -> None:
             if bus:
                 from comobot.bus import InboundMessage
 
-                await bus.publish(InboundMessage(
-                    session_key=session_key,
-                    text=content,
-                    sender="remote",
-                    channel="mobile",
-                ))
-                await remote_manager.send_encrypted(device_id, {
-                    "t": "message_sent",
-                    "session_key": session_key,
-                })
+                await bus.publish(
+                    InboundMessage(
+                        session_key=session_key,
+                        text=content,
+                        sender="remote",
+                        channel="mobile",
+                    )
+                )
+                await remote_manager.send_encrypted(
+                    device_id,
+                    {
+                        "t": "message_sent",
+                        "session_key": session_key,
+                    },
+                )
             else:
-                await remote_manager.send_encrypted(device_id, {
-                    "t": "error",
-                    "detail": "Message bus not available",
-                })
+                await remote_manager.send_encrypted(
+                    device_id,
+                    {
+                        "t": "error",
+                        "detail": "Message bus not available",
+                    },
+                )
 
     elif cmd == "voice_intent":
         transcript = msg.get("transcript")
@@ -176,27 +196,36 @@ async def _handle_command(app, device_id: str, msg: dict) -> None:
             intent_engine = getattr(app.state, "intent_engine", None)
             if intent_engine:
                 result = await intent_engine.submit_intent(device_id, transcript, context)
-                await remote_manager.send_encrypted(device_id, {
-                    "t": "intent_submitted",
-                    **result,
-                })
+                await remote_manager.send_encrypted(
+                    device_id,
+                    {
+                        "t": "intent_submitted",
+                        **result,
+                    },
+                )
             else:
-                await remote_manager.send_encrypted(device_id, {
-                    "t": "error",
-                    "detail": "Intent engine not available",
-                })
+                await remote_manager.send_encrypted(
+                    device_id,
+                    {
+                        "t": "error",
+                        "detail": "Intent engine not available",
+                    },
+                )
 
     elif cmd == "agent_command":
         agent_id = msg.get("agent_id")
         command = msg.get("command")  # "pause" | "resume"
         if agent_id and command:
             # Delegate to agent management (to be expanded)
-            await remote_manager.send_encrypted(device_id, {
-                "t": "agent_command_ack",
-                "agent_id": agent_id,
-                "command": command,
-                "status": "ok",
-            })
+            await remote_manager.send_encrypted(
+                device_id,
+                {
+                    "t": "agent_command_ack",
+                    "agent_id": agent_id,
+                    "command": command,
+                    "status": "ok",
+                },
+            )
 
     elif cmd == "intervene":
         session_key = msg.get("session_key")
@@ -207,22 +236,31 @@ async def _handle_command(app, device_id: str, msg: dict) -> None:
             agent = getattr(app.state, "agent", None)
             if agent and hasattr(agent, "register_intervention_response"):
                 agent.register_intervention_response(session_key, action, content or "")
-                await remote_manager.send_encrypted(device_id, {
-                    "t": "intervene_ack",
-                    "session_key": session_key,
-                    "action": action,
-                })
+                await remote_manager.send_encrypted(
+                    device_id,
+                    {
+                        "t": "intervene_ack",
+                        "session_key": session_key,
+                        "action": action,
+                    },
+                )
 
     elif cmd == "sync":
         last_seq = msg.get("last_seq", 0)
-        await remote_manager.send_encrypted(device_id, {
-            "t": "sync_ack",
-            "last_seq": last_seq,
-            "status": "ok",
-        })
+        await remote_manager.send_encrypted(
+            device_id,
+            {
+                "t": "sync_ack",
+                "last_seq": last_seq,
+                "status": "ok",
+            },
+        )
 
     else:
-        await remote_manager.send_encrypted(device_id, {
-            "t": "error",
-            "detail": f"Unknown command: {cmd}",
-        })
+        await remote_manager.send_encrypted(
+            device_id,
+            {
+                "t": "error",
+                "detail": f"Unknown command: {cmd}",
+            },
+        )

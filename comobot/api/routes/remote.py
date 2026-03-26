@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
 
 from comobot.api.deps import get_current_device, get_current_user, get_device_manager
 from comobot.api.remote.device_manager import DeviceManager

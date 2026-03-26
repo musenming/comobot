@@ -132,11 +132,14 @@ class ConnectionManager:
         """Forward session events to mobile devices subscribed to this session."""
         if self.remote_manager:
             try:
-                await self.remote_manager.broadcast_to_subscribers(session_key, {
-                    "t": "new-message",
-                    "sid": session_key,
-                    "message": data,
-                })
+                await self.remote_manager.broadcast_to_subscribers(
+                    session_key,
+                    {
+                        "t": "new-message",
+                        "sid": session_key,
+                        "message": data,
+                    },
+                )
             except Exception:
                 pass  # Don't let remote failures affect web clients
 

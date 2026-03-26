@@ -909,9 +909,7 @@ class AgentLoop:
         finally:
             self._intervention_callbacks.pop(session_key, None)
 
-    def register_intervention_response(
-        self, session_key: str, action: str, content: str
-    ) -> None:
+    def register_intervention_response(self, session_key: str, action: str, content: str) -> None:
         """Called by WS handler when mobile sends an intervention response."""
         future = self._intervention_callbacks.get(session_key)
         if future and not future.done():

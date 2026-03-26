@@ -57,6 +57,7 @@ def create_app(
         app.state.intent_engine = IntentEngine(db=db)
 
     # Register routes
+    from comobot.api.routes.agents import router as agents_router
     from comobot.api.routes.auth import router as auth_router
     from comobot.api.routes.channels import router as channels_router
     from comobot.api.routes.chat import router as chat_router
@@ -67,14 +68,13 @@ def create_app(
     from comobot.api.routes.knowhow import router as knowhow_router
     from comobot.api.routes.logs import router as logs_router
     from comobot.api.routes.providers import router as providers_router
+    from comobot.api.routes.remote import router as remote_router
     from comobot.api.routes.sessions import router as sessions_router
     from comobot.api.routes.settings import router as settings_router
     from comobot.api.routes.setup import router as setup_router
     from comobot.api.routes.skills import router as skills_router
     from comobot.api.routes.webhook import router as webhook_router
     from comobot.api.routes.workflows import router as workflows_router
-    from comobot.api.routes.agents import router as agents_router
-    from comobot.api.routes.remote import router as remote_router
     from comobot.api.routes.ws import router as ws_router
     from comobot.api.routes.ws_remote import router as ws_remote_router
 

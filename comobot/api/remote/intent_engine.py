@@ -64,9 +64,7 @@ class IntentEngine:
         try:
             # If we have an agent loop, use it for intent classification
             if agent_loop:
-                result = await self._classify_with_agent(
-                    intent["transcript"], agent_loop
-                )
+                result = await self._classify_with_agent(intent["transcript"], agent_loop)
             else:
                 # Fallback: simple keyword-based classification
                 result = self._classify_simple(intent["transcript"])
@@ -94,12 +92,15 @@ class IntentEngine:
 
             # Notify device
             if remote_manager and intent.get("device_id"):
-                await remote_manager.send_encrypted(intent["device_id"], {
-                    "t": "intent_update",
-                    "intent_id": intent_id,
-                    "status": "completed",
-                    **result,
-                })
+                await remote_manager.send_encrypted(
+                    intent["device_id"],
+                    {
+                        "t": "intent_update",
+                        "intent_id": intent_id,
+                        "status": "completed",
+                        **result,
+                    },
+                )
 
             return {"intent_id": intent_id, "status": "completed", **result}
 
@@ -113,12 +114,15 @@ class IntentEngine:
             logger.error("Intent processing failed: {} - {}", intent_id, error_msg)
 
             if remote_manager and intent.get("device_id"):
-                await remote_manager.send_encrypted(intent["device_id"], {
-                    "t": "intent_update",
-                    "intent_id": intent_id,
-                    "status": "failed",
-                    "error": error_msg,
-                })
+                await remote_manager.send_encrypted(
+                    intent["device_id"],
+                    {
+                        "t": "intent_update",
+                        "intent_id": intent_id,
+                        "status": "failed",
+                        "error": error_msg,
+                    },
+                )
 
             return {"intent_id": intent_id, "status": "failed", "error": error_msg}
 
@@ -205,13 +209,9 @@ class IntentEngine:
 
     async def get_intent(self, intent_id: str) -> dict | None:
         """Get a single intent record."""
-        return await self.db.fetchone(
-            "SELECT * FROM voice_intents WHERE id = ?", (intent_id,)
-        )
+        return await self.db.fetchone("SELECT * FROM voice_intents WHERE id = ?", (intent_id,))
 
-    async def list_intents(
-        self, device_id: str, limit: int = 50, offset: int = 0
-    ) -> list[dict]:
+    async def list_intents(self, device_id: str, limit: int = 50, offset: int = 0) -> list[dict]:
         """List intents for a device, newest first."""
         return await self.db.fetchall(
             "SELECT * FROM voice_intents WHERE device_id = ? "
@@ -237,7 +237,5 @@ class IntentEngine:
 
     async def delete_intent(self, intent_id: str) -> bool:
         """Delete an intent record."""
-        cursor = await self.db.execute(
-            "DELETE FROM voice_intents WHERE id = ?", (intent_id,)
-        )
+        cursor = await self.db.execute("DELETE FROM voice_intents WHERE id = ?", (intent_id,))
         return cursor.rowcount > 0

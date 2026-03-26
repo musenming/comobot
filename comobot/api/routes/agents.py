@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from comobot.api.deps import get_current_device, get_current_user
+from comobot.api.deps import get_current_user
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 
@@ -42,28 +42,32 @@ async def list_agents(
                 ch_status = "running" if getattr(channel, "_running", False) else "sleeping"
                 agent_info["channels"].append(name)
                 # Also create per-channel "agent" entries for the mobile app
-                agents.append({
-                    "id": f"channel:{name}",
-                    "name": f"{agent_info['name']} ({name})",
-                    "status": ch_status,
-                    "model": agent_info["model"],
-                    "channels": [name],
-                    "current_task": None,
-                    "last_active_at": None,
-                })
+                agents.append(
+                    {
+                        "id": f"channel:{name}",
+                        "name": f"{agent_info['name']} ({name})",
+                        "status": ch_status,
+                        "model": agent_info["model"],
+                        "channels": [name],
+                        "current_task": None,
+                        "last_active_at": None,
+                    }
+                )
 
         # Insert main agent at the beginning
         agents.insert(0, agent_info)
     else:
-        agents.append({
-            "id": "main",
-            "name": "Agent",
-            "status": "sleeping",
-            "model": None,
-            "channels": [],
-            "current_task": None,
-            "last_active_at": None,
-        })
+        agents.append(
+            {
+                "id": "main",
+                "name": "Agent",
+                "status": "sleeping",
+                "model": None,
+                "channels": [],
+                "current_task": None,
+                "last_active_at": None,
+            }
+        )
 
     return {"agents": agents}
 

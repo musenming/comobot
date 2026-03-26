@@ -873,8 +873,6 @@ def connect_remote(
     import json
     import time
 
-    from loguru import logger
-
     from comobot.config.loader import get_data_dir, load_config
 
     config = load_config()
@@ -943,9 +941,7 @@ def connect_remote(
         try:
             for _ in range(60):  # 5 minutes max (5s intervals)
                 time.sleep(5)
-                row = await db.fetchone(
-                    "SELECT used FROM pairing_tokens WHERE token = ?", (token,)
-                )
+                row = await db.fetchone("SELECT used FROM pairing_tokens WHERE token = ?", (token,))
                 if row and row["used"]:
                     # Find the device that just paired
                     device = await db.fetchone(
@@ -963,7 +959,9 @@ def connect_remote(
                         console.print("\n[green]✓ Pairing token used![/green]")
                     break
             else:
-                console.print("\n[yellow]Pairing token expired. Run the command again to retry.[/yellow]")
+                console.print(
+                    "\n[yellow]Pairing token expired. Run the command again to retry.[/yellow]"
+                )
         except KeyboardInterrupt:
             console.print("\n[dim]Cancelled.[/dim]")
 
@@ -1057,7 +1055,9 @@ def connect_remove(
             return
 
         if len(matches) > 1:
-            console.print(f"[yellow]Multiple devices match '{device_id}'. Be more specific:[/yellow]")
+            console.print(
+                f"[yellow]Multiple devices match '{device_id}'. Be more specific:[/yellow]"
+            )
             for d in matches:
                 console.print(f"  {d['id'][:12]}  {d['device_name']} ({d['device_os']})")
             await db.close()

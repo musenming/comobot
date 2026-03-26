@@ -29,9 +29,7 @@ class RemoteConnectionManager:
     def __init__(self):
         self.connections: dict[str, RemoteConnection] = {}
 
-    async def connect(
-        self, device_id: str, ws: WebSocket, shared_key: bytes
-    ) -> RemoteConnection:
+    async def connect(self, device_id: str, ws: WebSocket, shared_key: bytes) -> RemoteConnection:
         """Accept and register an encrypted WS connection."""
         await ws.accept()
         conn = RemoteConnection(ws=ws, device_id=device_id, shared_key=shared_key)

@@ -10,7 +10,7 @@ from loguru import logger
 
 from comobot.db.connection import Database
 from comobot.security.auth import AuthManager
-from comobot.security.nacl_crypto import NaClKeyPair, generate_keypair
+from comobot.security.nacl_crypto import generate_keypair
 
 
 class DeviceManager:
@@ -70,9 +70,7 @@ class DeviceManager:
         Returns dict with: access_token, refresh_token, device_id, server_public_key
         Or None if the token is invalid/expired/used.
         """
-        row = await self.db.fetchone(
-            "SELECT * FROM pairing_tokens WHERE token = ?", (token,)
-        )
+        row = await self.db.fetchone("SELECT * FROM pairing_tokens WHERE token = ?", (token,))
         if not row:
             logger.warning("Pairing failed: token not found")
             return None
@@ -86,9 +84,7 @@ class DeviceManager:
             return None
 
         # Mark token as used
-        await self.db.execute(
-            "UPDATE pairing_tokens SET used = 1 WHERE token = ?", (token,)
-        )
+        await self.db.execute("UPDATE pairing_tokens SET used = 1 WHERE token = ?", (token,))
 
         # Create device record
         device_id = uuid.uuid4().hex
@@ -135,9 +131,7 @@ class DeviceManager:
 
     async def get_device(self, device_id: str) -> dict | None:
         """Get a device by ID."""
-        return await self.db.fetchone(
-            "SELECT * FROM remote_devices WHERE id = ?", (device_id,)
-        )
+        return await self.db.fetchone("SELECT * FROM remote_devices WHERE id = ?", (device_id,))
 
     async def remove_device(self, device_id: str) -> bool:
         """Deactivate a paired device."""
