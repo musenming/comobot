@@ -3,6 +3,11 @@
 import base64
 import io
 
+import pytest
+
+pytest.importorskip("PIL", reason="Pillow not installed (pip install Pillow)")
+pytest.importorskip("pyzbar", reason="pyzbar not installed (pip install pyzbar)")
+
 import qrcode as qr_lib
 from PIL import Image
 from pyzbar.pyzbar import decode as decode_qr

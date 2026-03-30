@@ -4,6 +4,8 @@ from types import SimpleNamespace
 
 import pytest
 
+pytest.importorskip("nh3", reason="Matrix dependencies not installed (pip install comobot[matrix])")
+
 import comobot.channels.matrix as matrix_module
 from comobot.bus.events import OutboundMessage
 from comobot.bus.queue import MessageBus

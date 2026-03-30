@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from loguru import logger
 
 from comobot.db.connection import Database
 from comobot.security.auth import AuthManager
@@ -56,8 +57,35 @@ def create_app(
         app.state.device_manager = DeviceManager(db=db, auth=auth)
         app.state.intent_engine = IntentEngine(db=db)
 
+    # Initialize ASR service
+    config = kwargs.get("config")
+    if config and getattr(config, "asr", None):
+        asr_cfg = config.asr
+        if asr_cfg.enabled and asr_cfg.provider:
+            from comobot.asr.service import ASRService
+
+            provider_cfg = asr_cfg.providers.get(asr_cfg.provider)
+            if provider_cfg:
+                logger.info(
+                    "ASR enabled: provider='{}' mode='{}' app_key='{}' has_ak={}",
+                    asr_cfg.provider,
+                    provider_cfg.mode,
+                    provider_cfg.app_key[:8] + "..." if provider_cfg.app_key else "(empty)",
+                    bool(provider_cfg.access_key_id),
+                )
+                app.state.asr_service = ASRService(asr_cfg)
+            else:
+                logger.warning(
+                    "ASR provider '{}' configured but not found in providers dict", asr_cfg.provider
+                )
+        else:
+            logger.info(
+                "ASR disabled (enabled={}, provider='{}')", asr_cfg.enabled, asr_cfg.provider
+            )
+
     # Register routes
     from comobot.api.routes.agents import router as agents_router
+    from comobot.api.routes.asr import router as asr_router
     from comobot.api.routes.auth import router as auth_router
     from comobot.api.routes.channels import router as channels_router
     from comobot.api.routes.chat import router as chat_router
@@ -95,6 +123,7 @@ def create_app(
     app.include_router(settings_router)
     app.include_router(skills_router)
     app.include_router(agents_router)
+    app.include_router(asr_router)
     app.include_router(remote_router)
     app.include_router(ws_remote_router)
     app.include_router(ws_router)

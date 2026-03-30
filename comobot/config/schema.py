@@ -417,6 +417,32 @@ class ToolsConfig(Base):
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
 
 
+class ASRProviderConfig(Base):
+    """Single ASR provider configuration.
+
+    Supports two modes:
+    - "rest": OpenAI-compatible /audio/transcriptions endpoint (Groq, OpenAI, etc.)
+    - "ali_nls": Alibaba Cloud NLS WebSocket real-time transcription
+    """
+
+    mode: str = "rest"  # "rest" or "ali_nls"
+    api_key: str = ""  # REST: Bearer token; ali_nls: static token (fallback)
+    api_base: str = ""  # REST: e.g. https://api.groq.com/openai/v1; ali_nls: wss://...
+    app_key: str = ""  # ali_nls: AppKey from console
+    access_key_id: str = ""  # ali_nls: Alibaba Cloud AccessKey ID (for auto token refresh)
+    access_key_secret: str = ""  # ali_nls: Alibaba Cloud AccessKey Secret
+    model: str = ""  # REST: e.g. whisper-large-v3
+    language: str | None = None  # None = auto-detect; 'zh', 'en', etc.
+
+
+class ASRConfig(Base):
+    """ASR (Automatic Speech Recognition) configuration."""
+
+    enabled: bool = False
+    provider: str = ""  # Active provider name (key in providers dict)
+    providers: dict[str, ASRProviderConfig] = Field(default_factory=dict)
+
+
 class Config(BaseSettings):
     """Root configuration for comobot."""
 
@@ -427,6 +453,7 @@ class Config(BaseSettings):
     providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
+    asr: ASRConfig = Field(default_factory=ASRConfig)
 
     @property
     def workspace_path(self) -> Path:
@@ -508,4 +535,9 @@ class Config(BaseSettings):
                 return spec.default_api_base
         return None
 
-    model_config = ConfigDict(env_prefix="COMOBOT_", env_nested_delimiter="__")
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        env_prefix="COMOBOT_",
+        env_nested_delimiter="__",
+    )

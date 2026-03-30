@@ -47,7 +47,7 @@ async def test_migrations_create_tables(db):
 async def test_migrations_idempotent(db):
     await run_migrations(db)
     row = await db.fetchone("SELECT COUNT(*) as c FROM schema_version")
-    assert row["c"] == 3
+    assert row["c"] == 5
 
 
 @pytest.mark.asyncio

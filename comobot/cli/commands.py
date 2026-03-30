@@ -733,6 +733,7 @@ def _gateway_start(
                 channels=channels,
                 bus=bus,
                 cron=cron,
+                config=config,
             )
 
             import uvicorn

@@ -128,6 +128,40 @@ class ConnectionManager:
         # Also forward to subscribed remote devices
         await self._broadcast_to_remote(session_key, data)
 
+    async def broadcast_session_update(
+        self, session_key: str, *, title: str | None = None, summary: str | None = None
+    ) -> None:
+        """Broadcast session metadata update (title/summary) to web + remote devices."""
+        event = {
+            "event": "update-session",
+            "session_key": session_key,
+            "title": title,
+            "summary": summary,
+        }
+        # Web clients
+        disconnected = []
+        for ws in self.session_connections:
+            try:
+                await ws.send_json(event)
+            except Exception:
+                disconnected.append(ws)
+        for ws in disconnected:
+            self.disconnect_sessions(ws)
+        # Remote devices
+        if self.remote_manager:
+            try:
+                await self.remote_manager.broadcast_to_subscribers(
+                    session_key,
+                    {
+                        "t": "update-session",
+                        "session_key": session_key,
+                        "title": title,
+                        "summary": summary,
+                    },
+                )
+            except Exception:
+                pass
+
     async def _broadcast_to_remote(self, session_key: str, data: dict) -> None:
         """Forward session events to mobile devices subscribed to this session."""
         if self.remote_manager:

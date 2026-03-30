@@ -195,6 +195,14 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         );
         """,
     ),
+    (
+        5,
+        "extend_voice_intents_confirmation",
+        """
+        ALTER TABLE voice_intents ADD COLUMN demand_summary TEXT;
+        ALTER TABLE voice_intents ADD COLUMN confirmed_at TEXT;
+        """,
+    ),
 ]
 
 

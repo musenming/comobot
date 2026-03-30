@@ -551,6 +551,10 @@ class AgentLoop:
                 response = await self._process_message(msg)
                 if response is not None:
                     await self.bus.publish_outbound(response)
+                    # Voice intent completion: push result back to Remote device
+                    intent_id = (msg.metadata or {}).get("intent_id")
+                    if intent_id:
+                        asyncio.create_task(self._complete_voice_intent(intent_id, response, msg))
                 elif msg.channel == "cli":
                     await self.bus.publish_outbound(
                         OutboundMessage(
@@ -572,6 +576,40 @@ class AgentLoop:
                         content="Sorry, I encountered an error.",
                     )
                 )
+
+    async def _complete_voice_intent(self, intent_id: str, response, msg) -> None:
+        """Update voice_intent status to completed and notify the Remote device."""
+        try:
+            device_id = (msg.metadata or {}).get("device_id")
+            result_text = (response.content or "")[:2000]
+
+            # Update DB
+            db = getattr(self._db_session_manager, "db", None) if self._db_session_manager else None
+            if db:
+                result_json = json.dumps({"content": result_text}, ensure_ascii=False)
+                await db.execute(
+                    "UPDATE voice_intents SET status = 'completed', result = ?, "
+                    "session_key = ?, updated_at = datetime('now') WHERE id = ?",
+                    (result_json, msg.session_key, intent_id),
+                )
+
+            # Push to Remote device via encrypted WS
+            if device_id:
+                from comobot.api.routes.ws_remote import get_remote_manager
+
+                remote_mgr = get_remote_manager()
+                await remote_mgr.send_encrypted(
+                    device_id,
+                    {
+                        "t": "intent_update",
+                        "intent_id": intent_id,
+                        "status": "completed",
+                        "result": result_text,
+                        "session_key": msg.session_key,
+                    },
+                )
+        except Exception as e:
+            logger.warning("Failed to complete voice intent {}: {}", intent_id, e)
 
     async def close_mcp(self) -> None:
         """Close MCP connections."""
@@ -850,6 +888,7 @@ class AgentLoop:
         try:
             from comobot.api.routes.ws import manager as ws_manager
 
+            last_content = ""
             for m in messages:
                 role = m.get("role")
                 content = m.get("content", "")
@@ -873,6 +912,15 @@ class AgentLoop:
                             "created_at": m.get("timestamp", ""),
                         },
                     }
+                )
+                last_content = str(content)[:100]
+
+            # Broadcast session metadata update (title from key, summary from last message)
+            if last_content:
+                parts = session_key.split(":", 1)
+                title = parts[1][:30] if len(parts) == 2 else session_key[:30]
+                await ws_manager.broadcast_session_update(
+                    session_key, title=title, summary=last_content
                 )
         except Exception:
             logger.debug("Session WS broadcast skipped (no API running)")
