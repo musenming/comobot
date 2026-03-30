@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, nextTick, watch, onMounted, onUnmounted } from 'vue'
+import { ref, nextTick, watch, onMounted, onUnmounted, computed } from 'vue'
 import { NInput, NButton, NCheckbox } from 'naive-ui'
 import PageLayout from '../components/PageLayout.vue'
 import { useI18n } from '../composables/useI18n'
@@ -59,6 +59,147 @@ const selecting = ref(false)
 const selectedMsgIds = ref(new Set<number>())
 const showKnowhowPreview = ref(false)
 const extractMsgIds = ref<number[]>([])
+
+// File upload state
+interface AttachedFile {
+  id: string
+  file: File
+  name: string
+  size: number
+  type: string
+  url?: string        // set after upload
+  uploading: boolean
+  error?: string
+}
+
+const attachedFiles = ref<AttachedFile[]>([])
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const dragOver = ref(false)
+const uploading = ref(false)
+
+const hasFiles = computed(() => attachedFiles.value.length > 0)
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+function getFileIcon(type: string, name: string): string {
+  if (type.startsWith('image/')) return '🖼'
+  if (type.startsWith('audio/')) return '🎵'
+  if (type === 'application/pdf') return '📄'
+  const ext = name.split('.').pop()?.toLowerCase() || ''
+  if (['py', 'js', 'ts', 'vue', 'jsx', 'tsx', 'java', 'go', 'rs', 'cpp', 'c', 'h'].includes(ext)) return '💻'
+  if (['zip', 'tar', 'gz'].includes(ext)) return '📦'
+  if (['csv', 'xls', 'xlsx'].includes(ext)) return '📊'
+  if (['doc', 'docx', 'rtf'].includes(ext)) return '📝'
+  return '📎'
+}
+
+function openFilePicker() {
+  fileInputRef.value?.click()
+}
+
+function handleFileSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (input.files) {
+    addFiles(Array.from(input.files))
+  }
+  // Reset so selecting the same file again triggers change
+  input.value = ''
+}
+
+function addFiles(files: File[]) {
+  for (const file of files) {
+    // Skip duplicates by name+size
+    if (attachedFiles.value.some(f => f.name === file.name && f.size === file.size)) continue
+    attachedFiles.value.push({
+      id: Math.random().toString(36).slice(2, 10),
+      file,
+      name: file.name,
+      size: file.size,
+      type: file.type || 'application/octet-stream',
+      uploading: false,
+    })
+  }
+}
+
+function removeFile(id: string) {
+  attachedFiles.value = attachedFiles.value.filter(f => f.id !== id)
+}
+
+function clearFiles() {
+  attachedFiles.value = []
+}
+
+// Drag & drop handlers
+function onDragEnter(e: DragEvent) {
+  e.preventDefault()
+  dragOver.value = true
+}
+function onDragOver(e: DragEvent) {
+  e.preventDefault()
+  dragOver.value = true
+}
+function onDragLeave(e: DragEvent) {
+  e.preventDefault()
+  // Only hide if leaving the drop zone entirely
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  const { clientX, clientY } = e
+  if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+    dragOver.value = false
+  }
+}
+function onDrop(e: DragEvent) {
+  e.preventDefault()
+  dragOver.value = false
+  if (e.dataTransfer?.files) {
+    addFiles(Array.from(e.dataTransfer.files))
+  }
+}
+
+async function uploadFiles(): Promise<{ name: string; url: string; type: string; size: number }[]> {
+  const toUpload = attachedFiles.value.filter(f => !f.url && !f.error)
+  if (toUpload.length === 0) {
+    return attachedFiles.value.filter(f => f.url).map(f => ({
+      name: f.name, url: f.url!, type: f.type, size: f.size,
+    }))
+  }
+
+  uploading.value = true
+  const formData = new FormData()
+  for (const f of toUpload) {
+    f.uploading = true
+    formData.append('files', f.file)
+  }
+
+  try {
+    const { data: results } = await api.post('/chat/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    // Map results back to attached files
+    for (const result of results) {
+      const match = toUpload.find(f => f.name === result.name)
+      if (match) {
+        match.url = result.url
+        match.uploading = false
+      }
+    }
+  } catch (e: any) {
+    for (const f of toUpload) {
+      f.uploading = false
+      f.error = e.response?.data?.detail || 'Upload failed'
+    }
+    throw e
+  } finally {
+    uploading.value = false
+  }
+
+  return attachedFiles.value.filter(f => f.url).map(f => ({
+    name: f.name, url: f.url!, type: f.type, size: f.size,
+  }))
+}
 
 function scrollToBottom() {
   nextTick(() => {
@@ -298,20 +439,51 @@ watch(data, (msg) => {
   }
 })
 
-function sendMessage() {
+async function sendMessage() {
   const text = input.value.trim()
-  if (!text || sending.value) return
+  if ((!text && !hasFiles.value) || sending.value) return
+
+  let fileRefs: { name: string; url: string; type: string; size: number }[] = []
+
+  // Upload files first if any
+  if (hasFiles.value) {
+    try {
+      fileRefs = await uploadFiles()
+    } catch {
+      // Upload failed — don't send message
+      return
+    }
+  }
+
+  // Build display content: text + file references
+  let displayContent = text
+  if (fileRefs.length > 0) {
+    const fileList = fileRefs.map(f => `📎 ${f.name}`).join('\n')
+    displayContent = displayContent ? `${displayContent}\n\n${fileList}` : fileList
+  }
+
   chatMessages.value.push({
     role: 'user',
-    content: text,
+    content: displayContent,
     created_at: new Date().toISOString(),
   })
+
+  // Build message content for the agent
+  let agentContent = text
+  if (fileRefs.length > 0) {
+    const fileInfo = fileRefs.map(f => `[File: ${f.name} (${f.type}, ${formatFileSize(f.size)}) → ${f.url}]`).join('\n')
+    agentContent = agentContent ? `${agentContent}\n\n${fileInfo}` : fileInfo
+  }
+
   send(JSON.stringify({
     type: 'message',
-    content: text,
+    content: agentContent,
     session_key: currentSessionKey.value,
+    files: fileRefs.length > 0 ? fileRefs : undefined,
   }))
+
   input.value = ''
+  clearFiles()
   sending.value = true
   scrollToBottom()
 }
@@ -442,11 +614,72 @@ function handleKeydown(e: KeyboardEvent) {
           </div>
         </div>
 
-        <div class="chat-input-area">
+        <div
+          class="chat-input-area"
+          :class="{ 'drag-over': dragOver }"
+          @dragenter="onDragEnter"
+          @dragover="onDragOver"
+          @dragleave="onDragLeave"
+          @drop="onDrop"
+        >
+          <!-- Drag overlay -->
+          <div v-if="dragOver" class="drag-overlay">
+            <div class="drag-overlay-content">
+              <span class="drag-icon">+</span>
+              <span>{{ t('chat.dropFiles') }}</span>
+            </div>
+          </div>
+
           <div class="connection-status" :class="{ online: connected }">
             {{ connected ? t('common.connected') : t('common.disconnected') }}
           </div>
+
+          <!-- File preview bar -->
+          <div v-if="hasFiles" class="file-preview-bar">
+            <div class="file-preview-list">
+              <div
+                v-for="file in attachedFiles"
+                :key="file.id"
+                class="file-preview-item"
+                :class="{ uploading: file.uploading, error: file.error }"
+              >
+                <span class="file-icon">{{ getFileIcon(file.type, file.name) }}</span>
+                <div class="file-info">
+                  <span class="file-name">{{ file.name }}</span>
+                  <span class="file-size">{{ formatFileSize(file.size) }}</span>
+                </div>
+                <button
+                  v-if="!file.uploading"
+                  class="file-remove"
+                  @click="removeFile(file.id)"
+                  :title="t('common.delete')"
+                >&times;</button>
+                <span v-else class="file-spinner" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Hidden file input -->
+          <input
+            ref="fileInputRef"
+            type="file"
+            multiple
+            style="display: none"
+            @change="handleFileSelect"
+          />
+
           <div class="input-row">
+            <button
+              class="attach-btn"
+              :disabled="!connected"
+              :title="t('chat.attachFile')"
+              @click="openFilePicker"
+            >
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <line x1="10" y1="4" x2="10" y2="16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <line x1="4" y1="10" x2="16" y2="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>
             <NInput
               v-model:value="input"
               type="textarea"
@@ -458,8 +691,8 @@ function handleKeydown(e: KeyboardEvent) {
             />
             <NButton
               type="primary"
-              :loading="sending"
-              :disabled="!input.trim() || !connected"
+              :loading="sending || uploading"
+              :disabled="(!input.trim() && !hasFiles) || !connected"
               @click="sendMessage"
             >
               {{ t('common.send') }}
@@ -651,7 +884,163 @@ function handleKeydown(e: KeyboardEvent) {
   flex-shrink: 0;
   border-top: 1px solid var(--border);
   padding-top: var(--space-3);
+  position: relative;
+  transition: border-color 200ms ease;
 }
+.chat-input-area.drag-over {
+  border-color: var(--accent-blue, #3b82f6);
+}
+.drag-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: rgba(59, 130, 246, 0.08);
+  border: 2px dashed var(--accent-blue, #3b82f6);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.drag-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent-blue, #3b82f6);
+  font-weight: 500;
+  font-size: var(--text-sm);
+}
+.drag-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent-blue, #3b82f6);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 300;
+  line-height: 1;
+}
+
+/* File preview bar */
+.file-preview-bar {
+  margin-bottom: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-muted);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+.file-preview-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.file-preview-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-width: 240px;
+  transition: box-shadow 160ms ease, border-color 160ms ease;
+}
+.file-preview-item:hover {
+  border-color: var(--accent-blue, #3b82f6);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+}
+.file-preview-item.uploading {
+  opacity: 0.7;
+}
+.file-preview-item.error {
+  border-color: var(--accent-red, #ef4444);
+  background: rgba(239, 68, 68, 0.04);
+}
+.file-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.file-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.file-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+.file-size {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.file-remove {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: background 120ms ease, color 120ms ease;
+}
+.file-remove:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--accent-red, #ef4444);
+}
+.file-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent-blue, #3b82f6);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Attach button */
+.attach-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  background: var(--surface, #fff);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.attach-btn:hover:not(:disabled) {
+  background: var(--bg-muted);
+  border-color: var(--accent-blue, #3b82f6);
+  color: var(--accent-blue, #3b82f6);
+}
+.attach-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .connection-status {
   font-size: var(--text-xs);
   color: var(--accent-red);

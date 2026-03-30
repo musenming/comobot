@@ -89,6 +89,9 @@ const en = {
     working: 'Working...',
     typeMessage: 'Type a message...',
     toolCall: 'Tool Call',
+    attachFile: 'Attach file',
+    dropFiles: 'Drop files here',
+    uploadFailed: 'Upload failed',
   },
 
   // Channels

@@ -44,6 +44,11 @@ class ChannelManager:
         self._channel_tasks: dict[str, asyncio.Task] = {}
         self._dispatch_task: asyncio.Task | None = None
 
+        # Shared ASR service for all channels that need audio transcription
+        from comobot.asr import ASRService
+
+        self._asr_service = ASRService(config.asr)
+
         self._init_channels()
 
     def _create_channel(self, name: str) -> BaseChannel | None:
@@ -67,9 +72,9 @@ class ChannelManager:
         if ch_cfg is None:
             return None
 
-        # Telegram needs extra kwargs
-        if name == "telegram":
-            return cls(ch_cfg, self.bus, groq_api_key=self.config.providers.groq.api_key)
+        # Pass ASR service to channels that support audio transcription
+        if name in ("telegram", "feishu"):
+            return cls(ch_cfg, self.bus, asr_service=self._asr_service)
         return cls(ch_cfg, self.bus)
 
     def _init_channels(self) -> None:

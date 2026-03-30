@@ -1,8 +1,11 @@
 """Chat API endpoints for web-based conversation."""
 
+import mimetypes
 import uuid
+from pathlib import Path
+from typing import List
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from comobot.api.deps import get_current_user, get_db
@@ -10,12 +13,88 @@ from comobot.db.connection import Database
 
 router = APIRouter(prefix="/api/chat")
 
+# Upload config
+UPLOAD_DIR = Path.home() / ".comobot" / "uploads"
+MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB per file
+MAX_FILES_PER_REQUEST = 10
+ALLOWED_EXTENSIONS = {
+    # Documents
+    ".txt", ".md", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv", ".json", ".xml", ".yaml",
+    ".yml", ".html", ".htm", ".rtf", ".log",
+    # Images
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico",
+    # Code
+    ".py", ".js", ".ts", ".jsx", ".tsx", ".vue", ".css", ".scss", ".java", ".go", ".rs",
+    ".cpp", ".c", ".h", ".sh", ".sql",
+    # Archives
+    ".zip", ".tar", ".gz",
+    # Audio
+    ".mp3", ".wav", ".ogg", ".m4a", ".flac",
+}
+
 SESSION_PREFIX = "web:"
 
 
 class ChatSendRequest(BaseModel):
     message: str
     session_id: str | None = None
+
+
+@router.post("/upload")
+async def upload_chat_files(
+    files: List[UploadFile],
+    _user: str = Depends(get_current_user),
+):
+    """Upload files for chat. Returns file metadata with URLs."""
+    if len(files) > MAX_FILES_PER_REQUEST:
+        raise HTTPException(400, f"Maximum {MAX_FILES_PER_REQUEST} files per upload")
+
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    results = []
+
+    for file in files:
+        # Validate extension
+        ext = Path(file.filename or "").suffix.lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(400, f"File type '{ext}' not allowed: {file.filename}")
+
+        # Read and validate size
+        content = await file.read()
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(400, f"File too large (max {MAX_FILE_SIZE // 1024 // 1024}MB): {file.filename}")
+
+        # Generate unique filename
+        file_id = uuid.uuid4().hex[:12]
+        safe_name = Path(file.filename or "file").name  # strip path components
+        stored_name = f"{file_id}_{safe_name}"
+        file_path = UPLOAD_DIR / stored_name
+        file_path.write_bytes(content)
+
+        # Detect MIME type
+        mime = file.content_type or mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
+
+        results.append({
+            "id": file_id,
+            "name": safe_name,
+            "size": len(content),
+            "type": mime,
+            "url": f"/api/chat/files/{stored_name}",
+        })
+
+    return results
+
+
+@router.get("/files/{filename:path}")
+async def serve_chat_file(filename: str, _user: str = Depends(get_current_user)):
+    """Serve an uploaded chat file."""
+    from fastapi.responses import FileResponse
+
+    file_path = (UPLOAD_DIR / filename).resolve()
+    if not str(file_path).startswith(str(UPLOAD_DIR.resolve())):
+        raise HTTPException(403, "Forbidden")
+    if not file_path.is_file():
+        raise HTTPException(404, "File not found")
+    return FileResponse(file_path)
 
 
 @router.get("/sessions")

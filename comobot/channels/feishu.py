@@ -265,9 +265,10 @@ class FeishuChannel(BaseChannel):
 
     name = "feishu"
 
-    def __init__(self, config: FeishuConfig, bus: MessageBus):
+    def __init__(self, config: FeishuConfig, bus: MessageBus, asr_service: Any | None = None):
         super().__init__(config, bus)
         self.config: FeishuConfig = config
+        self._asr_service = asr_service
         self._client: Any = None
         self._ws_client: Any = None
         self._ws_thread: threading.Thread | None = None
@@ -681,9 +682,44 @@ class FeishuChannel(BaseChannel):
             file_path = media_dir / filename
             file_path.write_bytes(data)
             logger.debug("Downloaded {} to {}", msg_type, file_path)
+
+            # Transcribe audio files via ASR service
+            if msg_type == "audio":
+                transcription = await self._transcribe_audio(str(file_path))
+                if transcription:
+                    return str(file_path), f"[transcription: {transcription}]"
+
             return str(file_path), f"[{msg_type}: {filename}]"
 
         return None, f"[{msg_type}: download failed]"
+
+    async def _transcribe_audio(self, file_path: str) -> str | None:
+        """Transcribe an audio file using the ASR service.
+
+        Returns transcribed text, or None if ASR is not configured.
+        """
+        if not self._asr_service:
+            logger.warning(
+                "收到语音消息但未配置 ASR 服务，请在 provider 设置中配置 ASR 以启用语音转文字"
+            )
+            return None
+
+        if not self._asr_service.config.enabled:
+            logger.warning(
+                "收到语音消息但 ASR 未启用，请在 provider 设置中启用 ASR 服务"
+            )
+            return None
+
+        try:
+            from comobot.asr import to_pcm
+
+            raw_bytes = Path(file_path).read_bytes()
+            pcm_bytes = to_pcm(raw_bytes)
+            result = await self._asr_service.transcribe(pcm_bytes)
+            return result.text if result and result.text else None
+        except Exception as e:
+            logger.error("ASR transcription failed: {}", e)
+            return None
 
     def _send_message_sync(
         self, receive_id_type: str, receive_id: str, msg_type: str, content: str

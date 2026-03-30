@@ -91,6 +91,9 @@ const zh: LocaleMessages = {
     working: '处理中...',
     typeMessage: '输入消息...',
     toolCall: '工具调用',
+    attachFile: '添加文件',
+    dropFiles: '拖放文件到这里',
+    uploadFailed: '上传失败',
   },
 
   // Channels

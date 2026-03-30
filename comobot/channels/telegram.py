@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+from typing import Any
 
 from loguru import logger
 from telegram import BotCommand, ReplyParameters, Update
@@ -122,16 +123,46 @@ class TelegramChannel(BaseChannel):
         self,
         config: TelegramConfig,
         bus: MessageBus,
-        groq_api_key: str = "",
+        asr_service: Any | None = None,
     ):
         super().__init__(config, bus)
         self.config: TelegramConfig = config
-        self.groq_api_key = groq_api_key
+        self._asr_service = asr_service
         self._app: Application | None = None
         self._chat_ids: dict[str, int] = {}  # Map sender_id to chat_id for replies
         self._typing_tasks: dict[str, asyncio.Task] = {}  # chat_id -> typing loop task
         self._media_group_buffers: dict[str, dict] = {}
         self._media_group_tasks: dict[str, asyncio.Task] = {}
+
+    async def _transcribe_audio(self, file_path: str) -> str | None:
+        """Transcribe an audio file using the ASR service.
+
+        Returns transcribed text, or None if ASR is not configured.
+        """
+        if not self._asr_service:
+            logger.warning(
+                "收到语音消息但未配置 ASR 服务，请在 provider 设置中配置 ASR 以启用语音转文字"
+            )
+            return None
+
+        if not self._asr_service.config.enabled:
+            logger.warning(
+                "收到语音消息但 ASR 未启用，请在 provider 设置中启用 ASR 服务"
+            )
+            return None
+
+        try:
+            from pathlib import Path
+
+            from comobot.asr import to_pcm
+
+            raw_bytes = Path(file_path).read_bytes()
+            pcm_bytes = to_pcm(raw_bytes)
+            result = await self._asr_service.transcribe(pcm_bytes)
+            return result.text if result and result.text else None
+        except Exception as e:
+            logger.error("ASR transcription failed: {}", e)
+            return None
 
     async def start(self) -> None:
         """Start the Telegram bot with long polling."""
@@ -398,12 +429,9 @@ class TelegramChannel(BaseChannel):
 
                 media_paths.append(str(file_path))
 
-                # Handle voice transcription
-                if media_type == "voice" or media_type == "audio":
-                    from comobot.providers.transcription import GroqTranscriptionProvider
-
-                    transcriber = GroqTranscriptionProvider(api_key=self.groq_api_key)
-                    transcription = await transcriber.transcribe(file_path)
+                # Handle voice/audio transcription via ASR service
+                if media_type in ("voice", "audio"):
+                    transcription = await self._transcribe_audio(file_path)
                     if transcription:
                         logger.info("Transcribed {}: {}...", media_type, transcription[:50])
                         content_parts.append(f"[transcription: {transcription}]")
