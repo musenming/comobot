@@ -38,7 +38,7 @@ const rendered = computed(() => {
           .replace(/&gt;/g, '>')
           .replace(/&quot;/g, '"')
         const highlighted = hljs.highlight(decoded, { language: lang }).value
-        return `<pre class="code-block"><div class="code-header"><span class="code-lang">${lang}</span><button class="code-copy" onclick="navigator.clipboard.writeText(this.closest('pre').querySelector('code').textContent)">Copy</button></div><code class="hljs language-${lang}">${highlighted}</code></pre>`
+        return `<pre class="code-block"><div class="code-header"><span class="code-lang">${lang}</span><button class="code-copy" onclick="(function(btn){var t=btn.closest('pre').querySelector('code').textContent;if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).catch(function(){var a=document.createElement('textarea');a.value=t;a.style.position='fixed';a.style.opacity='0';document.body.appendChild(a);a.select();document.execCommand('copy');document.body.removeChild(a)})}else{var a=document.createElement('textarea');a.value=t;a.style.position='fixed';a.style.opacity='0';document.body.appendChild(a);a.select();document.execCommand('copy');document.body.removeChild(a)}btn.textContent='Copied!';setTimeout(function(){btn.textContent='Copy'},1500)})(this)">Copy</button></div><code class="hljs language-${lang}">${highlighted}</code></pre>`
       } catch {
         return `<pre class="code-block"><code>${code}</code></pre>`
       }

@@ -20,10 +20,28 @@ const copyDone = ref(false)
 
 function copyContent() {
   const text = props.content || ''
-  navigator.clipboard.writeText(text).then(() => {
+  const onSuccess = () => {
     copyDone.value = true
     setTimeout(() => { copyDone.value = false }, 1500)
-  })
+  }
+  // Clipboard API requires Secure Context (HTTPS or localhost).
+  // Fall back to execCommand for HTTP deployments.
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).then(onSuccess).catch(() => fallbackCopy(text, onSuccess))
+  } else {
+    fallbackCopy(text, onSuccess)
+  }
+}
+
+function fallbackCopy(text: string, onSuccess: () => void) {
+  const ta = document.createElement('textarea')
+  ta.value = text
+  ta.style.position = 'fixed'
+  ta.style.opacity = '0'
+  document.body.appendChild(ta)
+  ta.select()
+  try { document.execCommand('copy'); onSuccess() } catch { /* silent */ }
+  document.body.removeChild(ta)
 }
 </script>
 
