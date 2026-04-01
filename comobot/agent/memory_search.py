@@ -213,6 +213,20 @@ class MemorySearchEngine:
             rel = f"memory/{p.name}"
             files.append((rel, p))
 
+        # Episodic memory files
+        episodic_dir = self.workspace / "episodic"
+        if episodic_dir.exists():
+            for p in sorted(episodic_dir.glob("*.md")):
+                if not p.name.startswith("."):
+                    files.append((f"episodic/{p.name}", p))
+
+        # Feedback memory files
+        feedback_dir = self.workspace / "feedback"
+        if feedback_dir.exists():
+            for p in sorted(feedback_dir.glob("*.md")):
+                if not p.name.startswith("."):
+                    files.append((f"feedback/{p.name}", p))
+
         # Know-how files
         knowhow_dir = self.workspace / "knowhow"
         if knowhow_dir.exists():

@@ -41,8 +41,8 @@ async def main():
     print(f"   Audio size: {len(pcm_bytes)} bytes ({len(pcm_bytes) / (16000 * 2):.1f}s)")
 
     # Load config and create ASR service
-    from comobot.config.loader import load_config
     from comobot.asr import ASRService
+    from comobot.config.loader import load_config
 
     config = load_config()
     if not config.asr.enabled:
@@ -57,7 +57,7 @@ async def main():
     service = ASRService(config.asr)
     try:
         result = await service.transcribe(pcm_bytes, language=args.lang)
-        print(f"\n✅ Result:")
+        print("\n✅ Result:")
         print(f"   Text:     {result.text}")
         print(f"   Language: {result.language}")
         print(f"   Duration: {result.duration}s")

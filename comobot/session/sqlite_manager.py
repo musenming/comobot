@@ -124,10 +124,11 @@ class SQLiteSessionManager:
 
     async def append_messages(self, session_id: int, messages: list[dict]) -> None:
         """Append new messages to an existing session (incremental, no delete)."""
+        _persist_roles = {"user", "assistant", "process", "tool"}
         for msg in messages:
             role = msg.get("role", "")
-            if role not in ("user", "assistant"):
-                continue  # Only persist user/assistant for web display
+            if role not in _persist_roles:
+                continue
             content = msg.get("content", "")
             # Flatten multimodal content lists into plain text for DB storage
             if isinstance(content, list):

@@ -24,6 +24,7 @@ class LLMResponse:
     usage: dict[str, int] = field(default_factory=dict)
     reasoning_content: str | None = None  # Kimi, DeepSeek-R1 etc.
     thinking_blocks: list[dict] | None = None  # Anthropic extended thinking
+    error_type: str | None = None  # "content_safety" | "rate_limit" | "auth" | "context_length" | "network"
 
     @property
     def has_tool_calls(self) -> bool:

@@ -144,7 +144,7 @@ class TestStreamingASR:
 
         result = await session.finish()
 
-        print(f"\n--- Streaming ASR Test Results ---")
+        print("\n--- Streaming ASR Test Results ---")
         print(f"Intermediate events received during feeding: {events_before_finish}")
         print(f"Total intermediate events: {len(intermediate_events)}")
         print(f"Final result: '{result.text}'")
@@ -196,7 +196,7 @@ class TestStreamingASR:
         short_chunk = make_pcm_chunk(50)
         await session.feed(short_chunk)
 
-        result = await session.finish()
+        _ = await session.finish()
         # The mock still returns text, but in the real ws_remote handler,
         # duration < 0.3s is checked before calling finish()
         duration = len(short_chunk) / (16000 * 2)
@@ -239,8 +239,8 @@ class TestStreamingWSFlow:
         # Simulate end
         result = await session.finish()
 
-        print(f"\n--- WS Flow Simulation ---")
-        print(f"Chunks sent: 6")
+        print("\n--- WS Flow Simulation ---")
+        print("Chunks sent: 6")
         print(f"Total bytes: {total_bytes}")
         print(f"Duration: {total_bytes / (16000 * 2):.1f}s")
         print(f"Intermediate pushes: {len(pushed_events)}")
@@ -318,10 +318,13 @@ class TestWSHandlerIntegration:
     async def test_full_pipeline_delivers_intermediate_events(self):
         """The core integration test: verifies that asr_intermediate events
         are actually sent via remote_manager during chunk processing."""
-        from unittest.mock import AsyncMock, MagicMock
+        from unittest.mock import MagicMock
+
         from comobot.api.routes.ws_remote import (
-            _handle_voice_audio_stream,
             _audio_streams,
+            _handle_voice_audio_stream,
+        )
+        from comobot.api.routes.ws_remote import (
             remote_manager as real_rm,
         )
 
@@ -356,7 +359,7 @@ class TestWSHandlerIntegration:
             assert stream.session is not None, "Live session should be created"
 
             # 2. CHUNK x4 — feed audio, should trigger intermediate pushes
-            events_before_chunks = len(sent_events)
+            _events_before_chunks = len(sent_events)
             for i in range(4):
                 pcm = make_pcm_chunk(200)
                 audio_b64 = base64.b64encode(pcm).decode()
@@ -370,7 +373,7 @@ class TestWSHandlerIntegration:
             intermediate_events = [
                 e for e in sent_events if e.get("t") == "asr_intermediate"
             ]
-            print(f"\n--- Integration Pipeline Test ---")
+            print("\n--- Integration Pipeline Test ---")
             print(f"Events sent during chunks: {len(intermediate_events)}")
             for evt in intermediate_events:
                 status = "FINAL" if evt.get("is_final") else "partial"

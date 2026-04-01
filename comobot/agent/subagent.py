@@ -3,6 +3,7 @@
 import asyncio
 import json
 import uuid
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,77 @@ from comobot.bus.events import InboundMessage
 from comobot.bus.queue import MessageBus
 from comobot.config.schema import ExecToolConfig
 from comobot.providers.base import LLMProvider
+
+
+@dataclass
+class SubagentResult:
+    """Structured output from a subagent execution."""
+
+    summary: str = ""
+    findings: list[str] = field(default_factory=list)
+    actions_taken: list[str] = field(default_factory=list)
+    artifacts: list[str] = field(default_factory=list)
+    detail: str = ""
+
+    @classmethod
+    def from_text(cls, text: str) -> "SubagentResult":
+        """Parse structured JSON from text, falling back to plain text in detail."""
+        import re
+
+        match = re.search(r"```json\s*(\{.*?\})\s*```\s*$", text, re.DOTALL)
+        if match:
+            try:
+                data = json.loads(match.group(1))
+                if isinstance(data, dict) and "summary" in data:
+                    # The text before the JSON block is the detailed content
+                    detail_text = text[: match.start()].strip()
+                    return cls(
+                        summary=data.get("summary", ""),
+                        findings=data.get("findings", []),
+                        actions_taken=data.get("actions_taken", []),
+                        artifacts=data.get("artifacts", []),
+                        detail=detail_text or data.get("detail", ""),
+                    )
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+        # Try direct JSON parse (LLM returned pure JSON)
+        try:
+            data = json.loads(text)
+            if isinstance(data, dict) and "summary" in data:
+                return cls(
+                    summary=data.get("summary", ""),
+                    findings=data.get("findings", []),
+                    actions_taken=data.get("actions_taken", []),
+                    artifacts=data.get("artifacts", []),
+                    detail=data.get("detail", ""),
+                )
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+        # Fallback: treat entire text as detail
+        return cls(detail=text, summary=text[:200])
+
+    def format_for_announce(self) -> str:
+        """Format for announcement to the main agent."""
+        parts = []
+        if self.summary:
+            parts.append(f"Summary: {self.summary}")
+        if self.findings:
+            parts.append("Key findings:")
+            for f in self.findings[:10]:
+                parts.append(f"- {f}")
+        if self.actions_taken:
+            parts.append("Actions taken:")
+            for a in self.actions_taken[:5]:
+                parts.append(f"- {a}")
+        if self.artifacts:
+            parts.append("Artifacts:")
+            for a in self.artifacts[:10]:
+                parts.append(f"- {a}")
+        if self.detail:
+            parts.append(f"\nDetail:\n{self.detail}")
+        return "\n".join(parts) if parts else self.detail
 
 
 class SubagentManager:
@@ -110,6 +182,11 @@ class SubagentManager:
             tools.register(WebSearchTool(api_key=self.brave_api_key, proxy=self.web_proxy))
             tools.register(WebFetchTool(proxy=self.web_proxy))
 
+            # Wrap with reflection pipeline
+            from comobot.agent.tools.reflection.pipeline import ToolReflectionPipeline
+
+            reflection = ToolReflectionPipeline(registry=tools, enabled=True)
+
             system_prompt = self._build_subagent_prompt()
             messages: list[dict[str, Any]] = [
                 {"role": "system", "content": system_prompt},
@@ -163,7 +240,7 @@ class SubagentManager:
                             tool_call.name,
                             args_str,
                         )
-                        result = await tools.execute(tool_call.name, tool_call.arguments)
+                        result = await reflection.execute(tool_call.name, tool_call.arguments)
                         messages.append(
                             {
                                 "role": "tool",
@@ -179,34 +256,38 @@ class SubagentManager:
             if final_result is None:
                 final_result = "Task completed but no final response was generated."
 
+            # Parse structured result
+            parsed = SubagentResult.from_text(final_result)
+
             logger.info("Subagent [{}] completed successfully", task_id)
-            await self._announce_result(task_id, label, task, final_result, origin, "ok")
+            await self._announce_result(task_id, label, task, parsed, origin, "ok")
 
         except Exception as e:
             error_msg = f"Error: {str(e)}"
             logger.error("Subagent [{}] failed: {}", task_id, e)
-            await self._announce_result(task_id, label, task, error_msg, origin, "error")
+            error_result = SubagentResult(detail=error_msg, summary=error_msg)
+            await self._announce_result(task_id, label, task, error_result, origin, "error")
 
     async def _announce_result(
         self,
         task_id: str,
         label: str,
         task: str,
-        result: str,
+        result: SubagentResult,
         origin: dict[str, str],
         status: str,
     ) -> None:
         """Announce the subagent result to the main agent via the message bus."""
         status_text = "completed successfully" if status == "ok" else "failed"
+        formatted = result.format_for_announce()
 
         announce_content = f"""[Subagent '{label}' {status_text}]
 
 Task: {task}
 
-Result:
-{result}
+{formatted}
 
-Summarize this naturally for the user. Keep it brief (1-2 sentences). Do not mention technical details like "subagent" or task IDs."""
+Synthesize this into a natural response for the user. Preserve important details. Do not mention technical details like "subagent" or task IDs."""
 
         # Inject as system message to trigger main agent
         msg = InboundMessage(
@@ -236,7 +317,21 @@ You are a subagent spawned by the main agent to complete a specific task.
 Stay focused on the assigned task. Your final response will be reported back to the main agent.
 
 ## Workspace
-{self.workspace}"""
+{self.workspace}
+
+## Output Format
+Provide your response as thorough and detailed as possible. At the very end of your \
+response, append a JSON summary block fenced with ```json ... ```:
+```json
+{{
+  "summary": "1-2 sentence executive summary",
+  "findings": ["key finding 1", "key finding 2"],
+  "actions_taken": ["action 1", "action 2"],
+  "artifacts": ["file paths or code snippets produced"]
+}}
+```
+The detailed text BEFORE the JSON block is the primary content — keep it comprehensive. \
+The JSON block is supplementary metadata."""
         ]
 
         skills_summary = SkillsLoader(self.workspace).build_skills_summary()

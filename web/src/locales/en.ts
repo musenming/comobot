@@ -92,6 +92,8 @@ const en = {
     attachFile: 'Attach file',
     dropFiles: 'Drop files here',
     uploadFailed: 'Upload failed',
+    copy: 'Copy',
+    copied: 'Copied',
   },
 
   // Channels
@@ -371,6 +373,38 @@ const en = {
     selectSessionView: 'Select a session to view messages',
     knowledgeBase: 'Knowledge Base',
     knowledgeBaseSoon: 'Personalized knowledge base coming soon',
+    episodic: 'Auto Memories',
+    feedback: 'Feedback',
+    types: {
+      task: 'Task Experience',
+      fact: 'Fact',
+      preference: 'Preference',
+      feedback: 'Feedback',
+    },
+    stats: {
+      total: 'Total Memories',
+      byType: 'By Type',
+      mostUsed: 'Most Accessed',
+    },
+    actions: {
+      edit: 'Edit',
+      archive: 'Archive',
+      delete: 'Delete',
+      restore: 'Restore',
+    },
+    filter: {
+      all: 'All',
+      active: 'Active',
+      archived: 'Archived',
+    },
+    empty: 'No memories yet',
+    confirmArchive: 'Archive this memory?',
+    editTitle: 'Edit Memory',
+    tags: 'Tags',
+    confidence: 'Confidence',
+    lastAccessed: 'Last Accessed',
+    accessCount: 'Access Count',
+    source: 'Source',
   },
 
   // Skills
@@ -505,6 +539,36 @@ const en = {
     typeToConfirm: 'Type',
     toConfirm: 'to confirm:',
   },
+
+  // Process Messages (Agent v2)
+  process: {
+    tool_call: 'Tool Call',
+    tool_group: '{count} tool calls',
+    memory_recall: 'Retrieved {count} related experiences',
+    plan_created: 'Task Plan',
+    plan_step: 'Step {id}',
+    agent_spawn: '{type} Agent started',
+    agent_result: '{type} Agent completed',
+    reflection: 'Reflection',
+    escalation: 'Upgraded to planning mode',
+    thinking: 'Thinking...',
+    status: {
+      running: 'Running',
+      done: 'Done',
+      failed: 'Failed',
+      pending: 'Pending',
+    },
+    agent: {
+      researcher: 'Researcher',
+      coder: 'Coder',
+      analyst: 'Analyst',
+      general: 'General',
+    },
+    collapse: 'Collapse',
+    expand: 'Show details',
+    duration: '{ms}ms',
+  },
+
 }
 
 export default en

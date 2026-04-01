@@ -4,6 +4,7 @@ import { NInput, NButton, NCheckbox } from 'naive-ui'
 import PageLayout from '../components/PageLayout.vue'
 import { useI18n } from '../composables/useI18n'
 import ChatBubble from '../components/ChatBubble.vue'
+import PlanExecutionCard from '../components/PlanExecutionCard.vue'
 import ChannelTree from '../components/ChannelTree.vue'
 import KnowhowPreview from '../components/KnowhowPreview.vue'
 import { useWebSocket } from '../composables/useWebSocket'
@@ -19,12 +20,31 @@ interface ToolStep {
   startTime: number
 }
 
+interface PlanToolStep {
+  name: string
+  content: string
+  done: boolean
+  startTime?: number
+}
+
+interface PlanStepData {
+  id: string
+  description: string
+  agent_type?: string
+  status?: 'pending' | 'running' | 'done' | 'failed'
+  toolSteps?: PlanToolStep[]
+  progress?: string
+  result_summary?: string
+}
+
 interface ChatMessage {
   id?: number
-  role: 'user' | 'assistant'
+  role: 'user' | 'assistant' | 'process'
   content: string
   toolSteps?: ToolStep[]
   created_at?: string
+  processType?: string
+  processData?: any
 }
 
 const SESSION_STORAGE_KEY = 'comobot-current-session'
@@ -36,6 +56,7 @@ const chatMessages = ref<ChatMessage[]>([])
 const input = ref('')
 const sending = ref(false)
 const thinking = ref(false)
+const thinkingContent = ref('')  // ReAct thought content from agent reasoning
 const toolHint = ref('')
 const messagesEl = ref<HTMLElement | null>(null)
 const currentSessionKey = ref<string>('')
@@ -209,6 +230,216 @@ function scrollToBottom() {
   })
 }
 
+// Parse tool_calls from DB: stored as JSON-encoded string (e.g. '"plan_created"')
+function parseProcessType(raw: any): string {
+  if (!raw) return ''
+  if (typeof raw === 'string') {
+    try { const parsed = JSON.parse(raw); if (typeof parsed === 'string') return parsed } catch {}
+  }
+  return String(raw)
+}
+
+// Parse processData: handles double-encoded JSON from database/API layer.
+// The backend stores content as json.dumps(data), and the API serializes the
+// row with json.dumps() again, so we need to parse twice to get the real object.
+function parseProcessData(raw: string | object | undefined): any {
+  if (!raw) return {}
+  if (typeof raw === 'object') return raw
+  try {
+    const first = JSON.parse(raw)
+    // If first parse gave us a string that looks like JSON, parse again
+    if (typeof first === 'string') {
+      try { return JSON.parse(first) } catch { return { content: first } }
+    }
+    // If content field is a string that looks like JSON, parse it too
+    if (typeof first.content === 'string' && first.content.startsWith('{')) {
+      try { first.content = JSON.parse(first.content) } catch { /* keep as string */ }
+    }
+    return first
+  } catch {
+    return { content: String(raw) }
+  }
+}
+
+// Reconstruct plan state from flat process messages:
+// Merges plan_step, tool_hint, progress into the plan_created message
+function reconstructPlanState(msgs: ChatMessage[]): ChatMessage[] {
+  // Build a set of indices for pre-plan messages (thinking/progress before plan_created)
+  // so we can skip them — they are plan preamble, not standalone messages
+  const prePlanIndices = new Set<number>()
+  for (let i = 0; i < msgs.length; i++) {
+    const m = msgs[i]!
+    if (m.role === 'process' && (m.processType === 'thinking' || m.processType === 'progress' || m.processType === 'plan_progress')) {
+      // Look ahead: if a plan_created follows (possibly after more thinking/progress), mark as pre-plan
+      for (let j = i + 1; j < msgs.length; j++) {
+        const next = msgs[j]!
+        if (next.role !== 'process') break
+        if (next.processType === 'plan_created') { prePlanIndices.add(i); break }
+        if (next.processType !== 'thinking' && next.processType !== 'progress' && next.processType !== 'plan_progress') break
+      }
+    }
+  }
+
+  const result: ChatMessage[] = []
+  let currentPlan: ChatMessage | null = null
+  let pendingToolSteps: ToolStep[] = []
+
+  nextMsg: for (let i = 0; i < msgs.length; i++) {
+    const msg = msgs[i]!
+    if (msg.role !== 'process') {
+      // Attach accumulated standalone tool steps to the next assistant message
+      if (msg.role === 'assistant' && pendingToolSteps.length > 0) {
+        pendingToolSteps.forEach(s => { s.done = true })
+        msg.toolSteps = [...pendingToolSteps]
+        pendingToolSteps = []
+      }
+      result.push(msg)
+      continue
+    }
+
+    // Skip pre-plan preamble messages
+    if (prePlanIndices.has(i)) continue
+
+    const pt = msg.processType
+
+    // Thinking messages are transient UI indicators (animated dots) — they are
+    // only meaningful during real-time streaming and should never render on reload.
+    if (pt === 'thinking' || pt === 'thinking_content') continue
+
+    if (pt === 'plan_created') {
+      // Flush any pending standalone tool steps before entering plan context
+      pendingToolSteps = []
+      // Initialize steps with toolSteps arrays
+      if (msg.processData?.steps) {
+        for (const step of msg.processData.steps) {
+          if (!step.toolSteps) step.toolSteps = []
+          if (!step.status) step.status = 'pending'
+        }
+      }
+      currentPlan = msg
+      result.push(msg)
+      continue
+    }
+
+    if (!currentPlan) {
+      // No active plan — accumulate standalone tool_hint/progress for workflow block
+      if (pt === 'tool_hint') {
+        if (pendingToolSteps.length > 0) {
+          pendingToolSteps[pendingToolSteps.length - 1]!.done = true
+        }
+        pendingToolSteps.push({
+          name: msg.processData?.content || '',
+          content: '',
+          done: false,
+          startTime: 0,
+        })
+        continue
+      }
+      if (pt === 'progress' && pendingToolSteps.length > 0) {
+        pendingToolSteps[pendingToolSteps.length - 1]!.content = msg.processData?.content || ''
+        continue
+      }
+      // Absorb progress messages that are preamble to an upcoming standalone workflow.
+      // Look ahead: if a standalone tool_hint follows, skip this progress message.
+      if (pt === 'progress') {
+        for (let j = i + 1; j < msgs.length; j++) {
+          const next = msgs[j]!
+          if (next.role !== 'process') break
+          if (next.processType === 'tool_hint' && !next.processData?.step_id) continue nextMsg
+          if (next.processType !== 'progress') break
+        }
+      }
+      // Other process types: keep as-is
+      result.push(msg)
+      continue
+    }
+
+    // Plan-related messages: merge into currentPlan instead of showing separately
+    if (pt === 'plan_step') {
+      const stepId = msg.processData?.step_id
+      const step = (currentPlan.processData.steps as PlanStepData[]).find(s => s.id === stepId)
+      if (step) {
+        if (msg.processData.status) step.status = msg.processData.status
+        if (msg.processData.progress) step.progress = msg.processData.progress
+        if (msg.processData.result_summary) step.result_summary = msg.processData.result_summary
+        if (msg.processData.agent_type) step.agent_type = msg.processData.agent_type
+      }
+      continue // absorbed into plan
+    }
+
+    if (pt === 'tool_hint' || pt === 'progress') {
+      const stepId = msg.processData?.step_id
+      if (stepId) {
+        const step = (currentPlan.processData.steps as PlanStepData[]).find(s => s.id === stepId)
+        if (step) {
+          if (!step.toolSteps) step.toolSteps = []
+          if (pt === 'tool_hint') {
+            // Mark previous tool as done
+            if (step.toolSteps.length > 0) {
+              step.toolSteps[step.toolSteps.length - 1]!.done = true
+            }
+            step.toolSteps.push({
+              name: msg.processData.content || '',
+              content: '',
+              done: false,
+            })
+          } else {
+            // progress: update last tool content
+            if (step.toolSteps.length > 0) {
+              step.toolSteps[step.toolSteps.length - 1]!.content = msg.processData.content || ''
+            }
+          }
+          continue // absorbed into plan
+        }
+      }
+      // No step_id — not plan-related, accumulate for standalone workflow block
+      if (pt === 'tool_hint') {
+        if (pendingToolSteps.length > 0) {
+          pendingToolSteps[pendingToolSteps.length - 1]!.done = true
+        }
+        pendingToolSteps.push({
+          name: msg.processData.content || '',
+          content: '',
+          done: false,
+          startTime: 0,
+        })
+      } else if (pt === 'progress' && pendingToolSteps.length > 0) {
+        pendingToolSteps[pendingToolSteps.length - 1]!.content = msg.processData.content || ''
+      }
+      continue
+    }
+
+    if (pt === 'plan_progress') {
+      continue // absorbed
+    }
+
+    if (pt === 'plan_complete') {
+      currentPlan.processData._planStatus = 'done'
+      if (msg.processData?.summary) currentPlan.processData._planSummary = msg.processData.summary
+      // Mark all remaining tool steps as done
+      for (const step of (currentPlan.processData.steps as PlanStepData[])) {
+        if (step.toolSteps) step.toolSteps.forEach(ts => { ts.done = true })
+      }
+      currentPlan = null
+      continue // absorbed
+    }
+
+    // Other process types: keep as-is
+    result.push(msg)
+  }
+
+  // If plan still active, mark completed tool steps as done (persisted state)
+  if (currentPlan) {
+    for (const step of (currentPlan.processData.steps as PlanStepData[])) {
+      if ((step.status === 'done' || step.status === 'failed') && step.toolSteps) {
+        step.toolSteps.forEach(ts => { ts.done = true })
+      }
+    }
+  }
+
+  return result
+}
+
 // Load messages for a specific session (latest PAGE_SIZE, with pagination support)
 async function loadSessionMessages(sessionKey: string) {
   currentOffset.value = 0
@@ -218,27 +449,57 @@ async function loadSessionMessages(sessionKey: string) {
       `/sessions/${encodeURIComponent(sessionKey)}/messages`,
       { params: { limit: PAGE_SIZE, offset: 0 } },
     )
-    const msgs = (data || []).map((m: any) => ({
-      id: m.id,
-      role: m.role,
-      content: m.content || '',
-      created_at: m.created_at,
-    }))
-    chatMessages.value = msgs
-    hasMoreMessages.value = msgs.length >= PAGE_SIZE
-    currentOffset.value = msgs.length
+    const rawMsgs = (data || []).map((m: any) => {
+      if (m.role === 'process') {
+        let processData = {}
+        try { processData = parseProcessData(m.content) } catch {}
+        return {
+          id: m.id,
+          role: 'process' as const,
+          content: '',
+          processType: parseProcessType(m.tool_calls),
+          processData,
+          created_at: m.created_at,
+        }
+      }
+      return {
+        id: m.id,
+        role: m.role,
+        content: m.content || '',
+        created_at: m.created_at,
+      }
+    })
+    // Reconstruct plan state from flat process messages
+    chatMessages.value = reconstructPlanState(rawMsgs)
+    hasMoreMessages.value = rawMsgs.length >= PAGE_SIZE
+    currentOffset.value = rawMsgs.length
     scrollToBottom()
   } catch {
     // Try web-specific endpoint as fallback
     try {
       const shortKey = sessionKey.replace(/^web:/, '')
       const { data } = await api.get(`/chat/sessions/${encodeURIComponent(shortKey)}/messages`)
-      chatMessages.value = (data || []).map((m: any) => ({
-        id: m.id,
-        role: m.role,
-        content: m.content || '',
-        created_at: m.created_at,
-      }))
+      const rawMsgs = (data || []).map((m: any) => {
+        if (m.role === 'process') {
+          let processData = {}
+          try { processData = parseProcessData(m.content) } catch {}
+          return {
+            id: m.id,
+            role: 'process' as const,
+            content: '',
+            processType: parseProcessType(m.tool_calls),
+            processData,
+            created_at: m.created_at,
+          }
+        }
+        return {
+          id: m.id,
+          role: m.role,
+          content: m.content || '',
+          created_at: m.created_at,
+        }
+      })
+      chatMessages.value = reconstructPlanState(rawMsgs)
       scrollToBottom()
     } catch {
       // Session may not exist in DB yet (new session)
@@ -255,12 +516,27 @@ async function loadOlderMessages() {
       `/sessions/${encodeURIComponent(currentSessionKey.value)}/messages`,
       { params: { limit: PAGE_SIZE, offset: currentOffset.value } },
     )
-    const older = (data || []).map((m: any) => ({
-      id: m.id,
-      role: m.role,
-      content: m.content || '',
-      created_at: m.created_at,
-    }))
+    const olderRaw = (data || []).map((m: any) => {
+      if (m.role === 'process') {
+        let processData = {}
+        try { processData = parseProcessData(m.content) } catch {}
+        return {
+          id: m.id,
+          role: 'process' as const,
+          content: '',
+          processType: parseProcessType(m.tool_calls),
+          processData,
+          created_at: m.created_at,
+        }
+      }
+      return {
+        id: m.id,
+        role: m.role,
+        content: m.content || '',
+        created_at: m.created_at,
+      }
+    })
+    const older = reconstructPlanState(olderRaw)
     if (older.length > 0) {
       // Preserve scroll position: remember distance from top before prepending
       const el = messagesEl.value
@@ -379,6 +655,40 @@ function toggleWorkflow(index: number) {
   workflowCollapsed.value[index] = !workflowCollapsed.value[index]
 }
 
+// Helper: find the latest plan_created message in chatMessages
+function findLatestPlanMsg(): ChatMessage | null {
+  for (let i = chatMessages.value.length - 1; i >= 0; i--) {
+    const m = chatMessages.value[i]
+    if (m && m.role === 'process' && m.processType === 'plan_created' && m.processData?.steps) {
+      return m
+    }
+  }
+  return null
+}
+
+// Helper: route a tool_hint/progress into the correct plan step
+function routeToolToPlanStep(stepId: string, toolName: string, isHint: boolean, content: string) {
+  const planMsg = findLatestPlanMsg()
+  if (!planMsg) return false
+  const step = (planMsg.processData.steps as PlanStepData[]).find(s => s.id === stepId)
+  if (!step) return false
+
+  if (!step.toolSteps) step.toolSteps = []
+  if (isHint) {
+    // Mark previous tool as done
+    if (step.toolSteps.length > 0) {
+      step.toolSteps[step.toolSteps.length - 1]!.done = true
+    }
+    step.toolSteps.push({ name: toolName, content: '', done: false, startTime: Date.now() })
+  } else {
+    // Progress update: update last tool content
+    if (step.toolSteps.length > 0) {
+      step.toolSteps[step.toolSteps.length - 1]!.content = content
+    }
+  }
+  return true
+}
+
 watch(data, (msg) => {
   if (!msg) return
   if (msg.type === 'ack') {
@@ -386,32 +696,48 @@ watch(data, (msg) => {
     activeToolSteps.value = []
   } else if (msg.type === 'thinking') {
     thinking.value = true
+  } else if (msg.type === 'thinking_content') {
+    // ReAct reasoning: show the agent's thought process
+    thinkingContent.value = msg.content || ''
   } else if (msg.type === 'tool_hint') {
     toolHint.value = msg.content
-    // Add a tool step to the workflow
-    activeToolSteps.value.push({
-      name: msg.content,
-      content: '',
-      done: false,
-      startTime: Date.now(),
-    })
-    // Mark previous step as done
-    if (activeToolSteps.value.length > 1) {
-      activeToolSteps.value[activeToolSteps.value.length - 2]!.done = true
+    // If has step_id, route into plan step; otherwise use standalone workflow
+    if (msg.step_id) {
+      routeToolToPlanStep(msg.step_id, msg.content, true, '')
+    } else {
+      activeToolSteps.value.push({
+        name: msg.content,
+        content: '',
+        done: false,
+        startTime: Date.now(),
+      })
+      if (activeToolSteps.value.length > 1) {
+        activeToolSteps.value[activeToolSteps.value.length - 2]!.done = true
+      }
     }
     scrollToBottom()
   } else if (msg.type === 'progress') {
-    // Update the last tool step content
-    if (activeToolSteps.value.length > 0) {
+    if (msg.step_id) {
+      routeToolToPlanStep(msg.step_id, '', false, msg.content)
+    } else if (activeToolSteps.value.length > 0) {
       const last = activeToolSteps.value[activeToolSteps.value.length - 1]
       last!.content = msg.content
     }
   } else if (msg.type === 'response') {
     thinking.value = false
+    thinkingContent.value = ''
     sending.value = false
     toolHint.value = ''
-    // Mark all remaining tool steps as done
     activeToolSteps.value.forEach(s => { s.done = true })
+    // Also mark all running plan step tools as done
+    const planMsg = findLatestPlanMsg()
+    if (planMsg) {
+      for (const step of (planMsg.processData.steps as PlanStepData[])) {
+        if (step.toolSteps) {
+          step.toolSteps.forEach(ts => { ts.done = true })
+        }
+      }
+    }
     const toolSteps = activeToolSteps.value.length > 0
       ? [...activeToolSteps.value]
       : undefined
@@ -422,7 +748,6 @@ watch(data, (msg) => {
       toolSteps,
       created_at: new Date().toISOString(),
     })
-    // Keep workflow expanded after completion (user can collapse manually)
     scrollToBottom()
   } else if (msg.type === 'error') {
     thinking.value = false
@@ -433,6 +758,67 @@ watch(data, (msg) => {
     chatMessages.value.push({
       role: 'assistant',
       content: `Error: ${msg.error}`,
+      created_at: new Date().toISOString(),
+    })
+    scrollToBottom()
+  } else if (msg.type === 'process') {
+    const { process_type, session_key, ...rest } = msg
+
+    // plan_step: update existing plan card, don't push separate message
+    if (process_type === 'plan_step') {
+      const planMsg = findLatestPlanMsg()
+      if (planMsg) {
+        const step = (planMsg.processData.steps as PlanStepData[]).find(
+          (s: any) => s.id === rest.step_id,
+        )
+        if (step) {
+          step.status = rest.status
+          if (rest.progress) step.progress = rest.progress
+          if (rest.result_summary) step.result_summary = rest.result_summary
+          if (rest.agent_type) step.agent_type = rest.agent_type
+          // When step finishes, mark its tool steps as done
+          if (rest.status === 'done' || rest.status === 'failed') {
+            if (step.toolSteps) {
+              step.toolSteps.forEach(ts => { ts.done = true })
+            }
+          }
+        }
+      }
+      scrollToBottom()
+      return
+    }
+
+    // plan_progress: update plan card status, don't push separate
+    if (process_type === 'plan_progress') {
+      scrollToBottom()
+      return
+    }
+
+    // plan_complete: update plan card to done status
+    if (process_type === 'plan_complete') {
+      const planMsg = findLatestPlanMsg()
+      if (planMsg) {
+        planMsg.processData._planStatus = 'done'
+        if (rest.summary) planMsg.processData._planSummary = rest.summary
+      }
+      scrollToBottom()
+      return
+    }
+
+    // For plan_created, ensure steps have toolSteps arrays
+    if (process_type === 'plan_created' && rest.steps) {
+      for (const step of rest.steps) {
+        if (!step.toolSteps) step.toolSteps = []
+        if (!step.status) step.status = 'pending'
+      }
+    }
+
+    // Other process types: push as message
+    chatMessages.value.push({
+      role: 'process',
+      content: '',
+      processType: process_type,
+      processData: rest,
       created_at: new Date().toISOString(),
     })
     scrollToBottom()
@@ -541,7 +927,7 @@ function handleKeydown(e: KeyboardEvent) {
           </div>
 
           <template v-for="(msg, i) in chatMessages" :key="i">
-            <!-- Workflow steps (collapsible) -->
+            <!-- Workflow steps (collapsible) — only for non-plan tool steps -->
             <div v-if="msg.toolSteps && msg.toolSteps.length > 0" class="workflow-block">
               <button class="workflow-header" @click="toggleWorkflow(i)">
                 <span class="workflow-chevron">{{ workflowCollapsed[i] ? '\u25B6' : '\u25BC' }}</span>
@@ -563,7 +949,23 @@ function handleKeydown(e: KeyboardEvent) {
               </div>
             </div>
 
+            <!-- Plan execution card (unified plan + workflow view) -->
             <div
+              v-if="msg.role === 'process' && msg.processType === 'plan_created'"
+              class="plan-card-row"
+            >
+              <PlanExecutionCard
+                :goal="msg.processData?.goal || ''"
+                :steps="msg.processData?.steps || []"
+                :status="msg.processData?._planStatus || (msg.processData?.steps?.every((s: any) => s.status === 'done') ? 'done' : 'executing')"
+                :summary="msg.processData?._planSummary || ''"
+                :plan-id="msg.processData?.plan_id"
+              />
+            </div>
+
+            <!-- Other messages (non-plan process, user, assistant) -->
+            <div
+              v-else
               class="message-row"
               :class="{ selectable: selecting }"
               @click="selecting && msg.id && toggleMsgSelect(msg.id)"
@@ -579,6 +981,8 @@ function handleKeydown(e: KeyboardEvent) {
                 :role="msg.role"
                 :content="msg.content"
                 :created-at="msg.created_at"
+                :process-type="msg.processType"
+                :process-data="msg.processData"
                 style="flex: 1; min-width: 0"
               />
             </div>
@@ -607,6 +1011,7 @@ function handleKeydown(e: KeyboardEvent) {
           </div>
 
           <div v-if="thinking" class="thinking-indicator">
+            <div v-if="thinkingContent" class="thinking-content">{{ thinkingContent }}</div>
             <div v-if="toolHint && activeToolSteps.length === 0" class="tool-hint">{{ toolHint }}</div>
             <div class="thinking-dots">
               <span class="dot" /><span class="dot" /><span class="dot" />
@@ -1058,6 +1463,12 @@ function handleKeydown(e: KeyboardEvent) {
   flex: 1;
 }
 
+/* Plan execution card row */
+.plan-card-row {
+  margin: var(--space-2) 0;
+  max-width: 65%;
+}
+
 /* Workflow block */
 .workflow-block {
   margin: var(--space-2) 0;
@@ -1167,6 +1578,17 @@ function handleKeydown(e: KeyboardEvent) {
   flex-direction: column;
   gap: 4px;
   padding: var(--space-3) var(--space-4);
+}
+.thinking-content {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  opacity: 0.85;
+  padding: 4px 8px;
+  border-left: 2px solid var(--border-color);
+  white-space: pre-wrap;
+  max-height: 80px;
+  overflow-y: auto;
+  line-height: 1.4;
 }
 .tool-hint {
   font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;

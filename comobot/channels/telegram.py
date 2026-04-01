@@ -536,8 +536,26 @@ class TelegramChannel(BaseChannel):
             logger.debug("Typing indicator stopped for {}: {}", chat_id, e)
 
     async def _on_error(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Log polling / handler errors instead of silently swallowing them."""
-        logger.error("Telegram error: {}", context.error)
+        """Log polling / handler errors.
+
+        Network-related errors (disconnects, timeouts) are logged as warnings
+        since they are transient and self-recovering.  Other errors are logged
+        at error level.
+        """
+        err = context.error
+        err_name = type(err).__name__
+        # Network-related errors: log as warning without traceback
+        if err_name in (
+            "NetworkError",
+            "TimedOut",
+            "RetryAfter",
+            "RemoteProtocolError",
+            "ConnectError",
+            "ReadTimeout",
+        ) or "disconnect" in str(err).lower():
+            logger.warning("Telegram network error ({}): {}", err_name, err)
+        else:
+            logger.error("Telegram error ({}): {}", err_name, err)
 
     def _get_extension(self, media_type: str, mime_type: str | None) -> str:
         """Get file extension based on media type."""

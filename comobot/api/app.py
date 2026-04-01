@@ -91,10 +91,12 @@ def create_app(
     from comobot.api.routes.chat import router as chat_router
     from comobot.api.routes.cron import router as cron_router
     from comobot.api.routes.dashboard import router as dashboard_router
+    from comobot.api.routes.episodic import router as episodic_router
     from comobot.api.routes.gateway import router as gateway_router
     from comobot.api.routes.health import router as health_router
     from comobot.api.routes.knowhow import router as knowhow_router
     from comobot.api.routes.logs import router as logs_router
+    from comobot.api.routes.planning import router as planning_router
     from comobot.api.routes.providers import router as providers_router
     from comobot.api.routes.remote import router as remote_router
     from comobot.api.routes.sessions import router as sessions_router
@@ -124,6 +126,8 @@ def create_app(
     app.include_router(skills_router)
     app.include_router(agents_router)
     app.include_router(asr_router)
+    app.include_router(planning_router)
+    app.include_router(episodic_router)
     app.include_router(remote_router)
     app.include_router(ws_remote_router)
     app.include_router(ws_router)

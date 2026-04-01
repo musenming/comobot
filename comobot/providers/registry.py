@@ -60,6 +60,16 @@ class ProviderSpec:
     # Provider supports cache_control on content blocks (e.g. Anthropic prompt caching)
     supports_prompt_caching: bool = False
 
+    # Provider supports the "system" message role.  When False, system messages
+    # are converted to user messages before sending (e.g. MiniMax).
+    supports_system_role: bool = True
+
+    # Additional message keys to preserve for this provider (beyond the standard set).
+    extra_msg_keys: frozenset[str] = frozenset()
+
+    # Message keys to exclude for this provider (removed from the standard allowed set).
+    excluded_msg_keys: frozenset[str] = frozenset()
+
     @property
     def label(self) -> str:
         return self.display_name or self.name.title()
@@ -170,6 +180,7 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
         strip_model_prefix=False,
         model_overrides=(),
         supports_prompt_caching=True,
+        extra_msg_keys=frozenset({"thinking_blocks"}),
     ),
     # OpenAI: LiteLLM recognizes "gpt-*" natively, no prefix needed.
     ProviderSpec(
@@ -316,6 +327,7 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
     ),
     # MiniMax: needs "minimax/" prefix for LiteLLM routing.
     # Uses OpenAI-compatible API at api.minimax.io/v1.
+    # Does NOT support the "system" role — system messages must be converted to user.
     ProviderSpec(
         name="minimax",
         keywords=("minimax",),
@@ -331,6 +343,7 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
         default_api_base="https://api.minimax.io/v1",
         strip_model_prefix=False,
         model_overrides=(),
+        supports_system_role=False,
     ),
     # === Local deployment (matched by config key, NOT by api_base) =========
     # vLLM / any OpenAI-compatible local server.

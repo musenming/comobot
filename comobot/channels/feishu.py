@@ -360,11 +360,18 @@ class FeishuChannel(BaseChannel):
 
         # Start WebSocket client in a separate thread with reconnect loop
         def run_ws():
+            last_warn_time = 0.0
             while self._running:
                 try:
                     self._ws_client.start()
                 except Exception as e:
-                    logger.warning("Feishu WebSocket error: {}", e)
+                    import time as _time
+
+                    now = _time.monotonic()
+                    # Throttle reconnect warnings: at most once per 60 seconds
+                    if now - last_warn_time >= 60:
+                        logger.warning("Feishu WebSocket error: {}", e)
+                        last_warn_time = now
                 if self._running:
                     import time
 

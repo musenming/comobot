@@ -303,6 +303,70 @@ class MemoryConfig(Base):
     qmd: QMDConfig = Field(default_factory=QMDConfig)
 
 
+class ReasoningConfig(Base):
+    """ReAct reasoning enhancement configuration."""
+
+    enabled: bool = True
+    default_level: str = "auto"  # "auto" | "full" | "lite" | "none"
+    show_thinking: bool = False  # Keep <thought> blocks in final reply
+    stall_detection: bool = True
+    stall_window: int = 3  # Consecutive similar thoughts before nudge
+
+
+class PlanningConfig(Base):
+    """Task planning configuration for complex task handling."""
+
+    enabled: bool = True
+    auto_detect: bool = True  # Auto-detect complexity at runtime
+    max_steps: int = 6  # Max steps in a plan
+    max_revisions: int = 2  # Max reflection revisions
+    parallel_agents: bool = True  # Allow parallel step execution
+    escalation_tool_count: int = 5  # Escalate after N tool calls
+    escalation_search_count: int = 3  # Escalate after N search calls
+    escalation_error_count: int = 2  # Escalate after N errors
+    escalation_iteration_count: int = 8  # Escalate after N iterations
+    llm_self_trigger: bool = True  # Allow LLM to self-trigger plan mode
+
+
+class ContextOptimizerConfig(Base):
+    """Context optimization configuration — task classification and history management."""
+
+    enabled: bool = True
+    task_classification: bool = True  # Classify queries to adjust context composition
+    history_optimization: bool = True  # Relevance scoring + progressive compression
+    safety_trim: bool = True  # Token safety net — trim when approaching model limit
+
+
+class EpisodicMemoryConfig(Base):
+    """Episodic memory auto-extraction configuration."""
+
+    enabled: bool = True
+    auto_extract: bool = True  # Auto-extract after conversation ends
+    max_inject: int = 5  # Max episodic memories to inject per query
+    extract_debounce_s: int = 30  # Debounce seconds after conversation ends
+    backfill_days: int = 30  # Backfill from recent N days of daily logs
+    confidence_threshold: float = 0.6  # Min confidence to keep a memory
+
+
+class AgentProfileConfig(Base):
+    """Per-agent-type configuration overrides."""
+
+    model: str | None = None  # None = use default model
+    max_iterations: int = 20
+
+
+class AgentProfilesConfig(Base):
+    """Multi-agent profile configurations."""
+
+    researcher: AgentProfileConfig = Field(
+        default_factory=lambda: AgentProfileConfig(max_iterations=15)
+    )
+    coder: AgentProfileConfig = Field(default_factory=lambda: AgentProfileConfig(max_iterations=30))
+    analyst: AgentProfileConfig = Field(
+        default_factory=lambda: AgentProfileConfig(max_iterations=20)
+    )
+
+
 class AgentDefaults(Base):
     """Default agent configuration."""
 
@@ -316,7 +380,12 @@ class AgentDefaults(Base):
     max_tool_iterations: int = 40
     memory_window: int = 100
     reasoning_effort: str | None = None  # low / medium / high — enables LLM thinking mode
+    reasoning: ReasoningConfig = Field(default_factory=ReasoningConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
+    planning: PlanningConfig = Field(default_factory=PlanningConfig)
+    episodic_memory: EpisodicMemoryConfig = Field(default_factory=EpisodicMemoryConfig)
+    context_optimizer: ContextOptimizerConfig = Field(default_factory=ContextOptimizerConfig)
+    agent_profiles: AgentProfilesConfig = Field(default_factory=AgentProfilesConfig)
 
 
 class AgentsConfig(Base):
@@ -408,6 +477,16 @@ class MCPServerConfig(Base):
     tool_timeout: int = 30  # Seconds before a tool call is cancelled
 
 
+class ReflectionConfig(Base):
+    """Tool execution reflection layer configuration."""
+
+    enabled: bool = False
+    max_retries: int = 2
+    max_consecutive_failures: int = 3
+    max_duplicate_calls: int = 2
+    cooldown_iterations: int = 5
+
+
 class ToolsConfig(Base):
     """Tools configuration."""
 
@@ -415,6 +494,7 @@ class ToolsConfig(Base):
     exec: ExecToolConfig = Field(default_factory=ExecToolConfig)
     restrict_to_workspace: bool = False  # If true, restrict all tool access to workspace directory
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
+    reflection: ReflectionConfig = Field(default_factory=ReflectionConfig)
 
 
 class ASRProviderConfig(Base):

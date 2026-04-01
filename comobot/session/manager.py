@@ -48,8 +48,22 @@ class Session:
                 sliced = sliced[i:]
                 break
 
+        # Collect all tool_call_ids that have a corresponding tool_calls in the slice.
+        # This is needed because message trimming can leave orphaned tool_result messages
+        # (a tool_result whose matching assistant tool_calls was trimmed away).
+        # MiniMax rejects tool_result messages whose tool_call_id it has never seen.
+        active_tool_call_ids: set[str] = set()
+        for m in sliced:
+            if m.get("role") == "assistant" and m.get("tool_calls"):
+                for tc in m["tool_calls"]:
+                    if isinstance(tc, dict) and "id" in tc:
+                        active_tool_call_ids.add(tc["id"])
+
         out: list[dict[str, Any]] = []
         for m in sliced:
+            # Skip orphaned tool results — their tool_call_id is not in active_tool_call_ids
+            if m.get("role") == "tool" and m.get("tool_call_id") not in active_tool_call_ids:
+                continue
             entry: dict[str, Any] = {"role": m["role"], "content": m.get("content", "")}
             for k in ("tool_calls", "tool_call_id", "name"):
                 if k in m:

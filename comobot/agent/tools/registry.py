@@ -35,6 +35,19 @@ class ToolRegistry:
         """Get all tool definitions in OpenAI format."""
         return [tool.to_schema() for tool in self._tools.values()]
 
+    async def execute_raw(self, name: str, params: dict[str, Any]) -> str:
+        """Execute a tool without appending error hints. Used by reflection retry engine."""
+        tool = self._tools.get(name)
+        if not tool:
+            return f"Error: Tool '{name}' not found. Available: {', '.join(self.tool_names)}"
+        try:
+            errors = tool.validate_params(params)
+            if errors:
+                return f"Error: Invalid parameters for tool '{name}': " + "; ".join(errors)
+            return await tool.execute(**params)
+        except Exception as e:
+            return f"Error executing {name}: {str(e)}"
+
     async def execute(self, name: str, params: dict[str, Any]) -> str:
         """Execute a tool by name with given parameters."""
         _hint = "\n\n[Analyze the error above and try a different approach.]"

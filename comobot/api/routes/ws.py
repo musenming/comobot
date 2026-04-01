@@ -323,21 +323,61 @@ async def ws_chat(websocket: WebSocket):
                 agent = getattr(websocket.app.state, "agent", None)
                 if agent and hasattr(agent, "process_direct"):
                     try:
-                        # Send thinking indicator
+                        session_id = session["id"]
+
+                        # Send + persist thinking indicator
                         await websocket.send_json(
                             {
                                 "type": "thinking",
                                 "session_key": session_key,
                             }
                         )
+                        await db.execute(
+                            "INSERT INTO messages (session_id, role, content, tool_calls) "
+                            "VALUES (?, 'process', '{}', ?)",
+                            (session_id, '"thinking"'),
+                        )
 
-                        async def on_progress(prog_content: str, *, tool_hint: bool = False):
-                            await websocket.send_json(
-                                {
-                                    "type": "tool_hint" if tool_hint else "progress",
-                                    "session_key": session_key,
-                                    "content": prog_content,
-                                }
+                        async def on_progress(
+                            prog_content: str,
+                            *,
+                            tool_hint: bool = False,
+                            step_id: str | None = None,
+                            thinking: bool = False,
+                            **_kw: object,
+                        ):
+                            if thinking:
+                                msg_type = "thinking_content"
+                            elif tool_hint:
+                                msg_type = "tool_hint"
+                            else:
+                                msg_type = "progress"
+                            payload: dict = {
+                                "type": msg_type,
+                                "session_key": session_key,
+                                "content": prog_content,
+                            }
+                            if step_id:
+                                payload["step_id"] = step_id
+                            await websocket.send_json(payload)
+                            # Thinking content is transient (shown during streaming,
+                            # cleared when response arrives) — skip persistence.
+                            if thinking:
+                                return
+                            # Persist to DB
+                            import json as _json
+
+                            process_data = {"content": prog_content}
+                            if step_id:
+                                process_data["step_id"] = step_id
+                            await db.execute(
+                                "INSERT INTO messages (session_id, role, content, tool_calls) "
+                                "VALUES (?, 'process', ?, ?)",
+                                (
+                                    session_id,
+                                    _json.dumps(process_data, ensure_ascii=False),
+                                    _json.dumps(msg_type),
+                                ),
                             )
 
                         response = await agent.process_direct(
@@ -346,6 +386,7 @@ async def ws_chat(websocket: WebSocket):
                             channel="web",
                             chat_id=session_key,
                             on_progress=on_progress,
+                            ws_send=websocket.send_json,
                         )
                         response_text = response if isinstance(response, str) else str(response)
 

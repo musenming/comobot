@@ -203,6 +203,43 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         ALTER TABLE voice_intents ADD COLUMN confirmed_at TEXT;
         """,
     ),
+    (
+        6,
+        "agent_v2_episodic_and_plans",
+        """
+        CREATE TABLE IF NOT EXISTS episodic_memories (
+            id              TEXT PRIMARY KEY,
+            type            TEXT NOT NULL CHECK(type IN ('task', 'fact', 'preference', 'feedback')),
+            content         TEXT NOT NULL,
+            confidence      REAL DEFAULT 1.0,
+            source_session  TEXT,
+            source_channel  TEXT,
+            tags            TEXT DEFAULT '[]',
+            file_path       TEXT UNIQUE,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            last_accessed_at TEXT,
+            access_count    INTEGER DEFAULT 0,
+            status          TEXT DEFAULT 'active' CHECK(status IN ('active', 'archived', 'merged'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_episodic_type ON episodic_memories(type);
+        CREATE INDEX IF NOT EXISTS idx_episodic_status ON episodic_memories(status);
+
+        CREATE TABLE IF NOT EXISTS task_plans (
+            id              TEXT PRIMARY KEY,
+            session_key     TEXT NOT NULL,
+            goal            TEXT NOT NULL,
+            steps           TEXT NOT NULL,
+            status          TEXT DEFAULT 'planning',
+            reflection      TEXT,
+            revision_count  INTEGER DEFAULT 0,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            completed_at    TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_messages_process
+        ON messages(session_id, tool_calls) WHERE role = 'process';
+        """,
+    ),
 ]
 
 

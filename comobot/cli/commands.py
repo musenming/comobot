@@ -402,7 +402,17 @@ def _gateway_start(
         logging.basicConfig(level=logging.DEBUG)
 
     # Suppress noisy third-party loggers
-    for name in ("httpx", "httpcore", "lark_oapi", "lark", "urllib3"):
+    for name in (
+        "httpx",
+        "httpcore",
+        "lark_oapi",
+        "lark",
+        "urllib3",
+        "telegram",
+        "telegram.ext",
+        "apscheduler",
+        "hpack",
+    ):
         logging.getLogger(name).setLevel(logging.WARNING)
 
     # Configure loguru file logging with sanitization
@@ -462,6 +472,9 @@ def _gateway_start(
         mcp_servers=config.tools.mcp_servers,
         channels_config=config.channels,
         memory_config=config.agents.defaults.memory,
+        reasoning_config=config.agents.defaults.reasoning,
+        reflection_config=config.tools.reflection,
+        context_optimizer_config=config.agents.defaults.context_optimizer,
     )
 
     # Set cron callback (needs agent)
@@ -1161,6 +1174,9 @@ def agent(
         mcp_servers=config.tools.mcp_servers,
         channels_config=config.channels,
         memory_config=config.agents.defaults.memory,
+        reasoning_config=config.agents.defaults.reasoning,
+        reflection_config=config.tools.reflection,
+        context_optimizer_config=config.agents.defaults.context_optimizer,
     )
 
     # Show spinner when logs are off (no output to miss); skip when logs are on

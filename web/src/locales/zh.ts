@@ -94,6 +94,8 @@ const zh: LocaleMessages = {
     attachFile: '添加文件',
     dropFiles: '拖放文件到这里',
     uploadFailed: '上传失败',
+    copy: '复制',
+    copied: '已复制',
   },
 
   // Channels
@@ -373,6 +375,38 @@ const zh: LocaleMessages = {
     selectSessionView: '选择一个会话以查看消息',
     knowledgeBase: '知识库',
     knowledgeBaseSoon: '个性化知识库即将推出',
+    episodic: '自动记忆',
+    feedback: '反馈记忆',
+    types: {
+      task: '任务经验',
+      fact: '事实',
+      preference: '偏好',
+      feedback: '反馈',
+    },
+    stats: {
+      total: '记忆总数',
+      byType: '按类型',
+      mostUsed: '最常访问',
+    },
+    actions: {
+      edit: '编辑',
+      archive: '归档',
+      delete: '删除',
+      restore: '恢复',
+    },
+    filter: {
+      all: '全部',
+      active: '活跃',
+      archived: '已归档',
+    },
+    empty: '暂无记忆',
+    confirmArchive: '确认归档此记忆？',
+    editTitle: '编辑记忆',
+    tags: '标签',
+    confidence: '置信度',
+    lastAccessed: '最近访问',
+    accessCount: '访问次数',
+    source: '来源',
   },
 
   // Skills
@@ -507,6 +541,36 @@ const zh: LocaleMessages = {
     typeToConfirm: '输入',
     toConfirm: '以确认：',
   },
+
+  // Process Messages (Agent v2)
+  process: {
+    tool_call: '工具调用',
+    tool_group: '{count} 个工具调用',
+    memory_recall: '调取了 {count} 条相关经验',
+    plan_created: '任务规划',
+    plan_step: '步骤 {id}',
+    agent_spawn: '{type} Agent 已启动',
+    agent_result: '{type} Agent 已完成',
+    reflection: '反思',
+    escalation: '已升级为规划模式',
+    thinking: '思考中...',
+    status: {
+      running: '执行中',
+      done: '完成',
+      failed: '失败',
+      pending: '等待中',
+    },
+    agent: {
+      researcher: '研究员',
+      coder: '编码员',
+      analyst: '分析师',
+      general: '通用',
+    },
+    collapse: '收起',
+    expand: '展开详情',
+    duration: '{ms}ms',
+  },
+
 }
 
 export default zh
