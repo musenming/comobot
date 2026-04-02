@@ -200,7 +200,7 @@ class Reflector:
         # Fallback: simple step-status listing
         lines = []
         for step in plan.steps:
-            status = "✓" if step.status == "done" else "✕"
+            status = "[+]" if step.status == "done" else "[ ]"
             lines.append(f"{status} {step.description}")
         return "\n".join(lines)
 

@@ -29,7 +29,7 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
-console = Console()
+console = Console(legacy_windows=False)
 EXIT_COMMANDS = {"exit", "quit", "/exit", "/quit", ":q"}
 
 
@@ -1384,53 +1384,53 @@ def channels_status():
 
     # WhatsApp
     wa = config.channels.whatsapp
-    table.add_row("WhatsApp", "✓" if wa.enabled else "✗", wa.bridge_url)
+    table.add_row("WhatsApp", "[green]✓[/green]" if wa.enabled else "[red]✗[/red]", wa.bridge_url)
 
     dc = config.channels.discord
-    table.add_row("Discord", "✓" if dc.enabled else "✗", dc.gateway_url)
+    table.add_row("Discord", "[green]✓[/green]" if dc.enabled else "[red]✗[/red]", dc.gateway_url)
 
     # Feishu
     fs = config.channels.feishu
     fs_config = f"app_id: {fs.app_id[:10]}..." if fs.app_id else "[dim]not configured[/dim]"
-    table.add_row("Feishu", "✓" if fs.enabled else "✗", fs_config)
+    table.add_row("Feishu", "[green]✓[/green]" if fs.enabled else "[red]✗[/red]", fs_config)
 
     # Mochat
     mc = config.channels.mochat
     mc_base = mc.base_url or "[dim]not configured[/dim]"
-    table.add_row("Mochat", "✓" if mc.enabled else "✗", mc_base)
+    table.add_row("Mochat", "[green]✓[/green]" if mc.enabled else "[red]✗[/red]", mc_base)
 
     # Telegram
     tg = config.channels.telegram
     tg_config = f"token: {tg.token[:10]}..." if tg.token else "[dim]not configured[/dim]"
-    table.add_row("Telegram", "✓" if tg.enabled else "✗", tg_config)
+    table.add_row("Telegram", "[green]✓[/green]" if tg.enabled else "[red]✗[/red]", tg_config)
 
     # Slack
     slack = config.channels.slack
     slack_config = "socket" if slack.app_token and slack.bot_token else "[dim]not configured[/dim]"
-    table.add_row("Slack", "✓" if slack.enabled else "✗", slack_config)
+    table.add_row("Slack", "[green]✓[/green]" if slack.enabled else "[red]✗[/red]", slack_config)
 
     # DingTalk
     dt = config.channels.dingtalk
     dt_config = (
         f"client_id: {dt.client_id[:10]}..." if dt.client_id else "[dim]not configured[/dim]"
     )
-    table.add_row("DingTalk", "✓" if dt.enabled else "✗", dt_config)
+    table.add_row("DingTalk", "[green]✓[/green]" if dt.enabled else "[red]✗[/red]", dt_config)
 
     # QQ
     qq = config.channels.qq
     qq_config = f"app_id: {qq.app_id[:10]}..." if qq.app_id else "[dim]not configured[/dim]"
-    table.add_row("QQ", "✓" if qq.enabled else "✗", qq_config)
+    table.add_row("QQ", "[green]✓[/green]" if qq.enabled else "[red]✗[/red]", qq_config)
 
     # WeChat
     wc = config.channels.wechat
     wc_cred = Path.home() / ".comobot" / "wechat-auth" / "credentials.json"
     wc_status = "logged in" if wc_cred.exists() else "[dim]not logged in[/dim]"
-    table.add_row("WeChat", "✓" if wc.enabled else "✗", wc_status)
+    table.add_row("WeChat", "[green]✓[/green]" if wc.enabled else "[red]✗[/red]", wc_status)
 
     # Email
     em = config.channels.email
     em_config = em.imap_host if em.imap_host else "[dim]not configured[/dim]"
-    table.add_row("Email", "✓" if em.enabled else "✗", em_config)
+    table.add_row("Email", "[green]✓[/green]" if em.enabled else "[red]✗[/red]", em_config)
 
     console.print(table)
 

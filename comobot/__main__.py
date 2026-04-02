@@ -10,6 +10,23 @@ options.
 
 import sys
 
+# On Windows, force UTF-8 console encoding to prevent UnicodeEncodeError when
+# Rich renders Unicode status characters (✓, ✗, →, etc.) on GBK/cp936 systems.
+if sys.platform == "win32":
+    try:
+        import ctypes
+
+        ctypes.windll.kernel32.SetConsoleCP(65001)
+        ctypes.windll.kernel32.SetConsoleOutputCP(65001)
+    except Exception:
+        pass
+    for _stream in (sys.stdout, sys.stderr):
+        if hasattr(_stream, "reconfigure"):
+            try:
+                _stream.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+
 # Python interpreter flags that may be passed when the binary is re-invoked
 # by multiprocessing or other internal mechanisms.
 _PYTHON_FLAGS = frozenset(
