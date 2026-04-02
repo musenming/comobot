@@ -506,7 +506,8 @@ class HistoryOptimizer:
             result["tool_calls"] = _summarize_tool_calls(tool_calls)
             if isinstance(content, str) and len(content) > self.ASSISTANT_TEXT_MAX_CHARS:
                 result["content"] = (
-                    content[: self.ASSISTANT_TEXT_MAX_CHARS] + f"\n[... truncated, called: {', '.join(names)}]"
+                    content[: self.ASSISTANT_TEXT_MAX_CHARS]
+                    + f"\n[... truncated, called: {', '.join(names)}]"
                 )
             return result
 
@@ -712,7 +713,5 @@ def _remove_orphaned_tool_results(messages: list[dict[str, Any]]) -> list[dict[s
                 valid_ids.add(tc_id)
 
     return [
-        msg
-        for msg in messages
-        if msg.get("role") != "tool" or msg.get("tool_call_id") in valid_ids
+        msg for msg in messages if msg.get("role") != "tool" or msg.get("tool_call_id") in valid_ids
     ]

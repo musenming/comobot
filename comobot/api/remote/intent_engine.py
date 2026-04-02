@@ -100,9 +100,7 @@ class IntentEngine:
         # --- Stage 2.5: LLM ASR correction + contextual alignment ---
         corrected = await self._correct_transcript(transcript, device_id, agent_loop)
         if corrected and corrected != transcript:
-            logger.info(
-                "ASR correction: '{}' → '{}'", transcript[:60], corrected[:60]
-            )
+            logger.info("ASR correction: '{}' → '{}'", transcript[:60], corrected[:60])
             transcript = corrected
             await self.db.execute(
                 "UPDATE voice_intents SET transcript = ?, updated_at = datetime('now') "
@@ -374,9 +372,7 @@ class IntentEngine:
         {"role": "assistant", "content": "帮我生成一份关于大模型在教育领域应用的报告"},
     ]
 
-    async def _correct_transcript(
-        self, transcript: str, device_id: str, agent_loop
-    ) -> str | None:
+    async def _correct_transcript(self, transcript: str, device_id: str, agent_loop) -> str | None:
         """LLM-based ASR correction with contextual alignment.
 
         Uses recent intent history for context so the LLM can infer domain-specific

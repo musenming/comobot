@@ -98,9 +98,7 @@ class TestEpisodicMemoryStore:
 
     @pytest.mark.asyncio
     async def test_get_returns_content(self, store, workspace, db):
-        mem = EpisodicMemory(
-            id="", type="fact", content="Important fact", tags=["test"]
-        )
+        mem = EpisodicMemory(id="", type="fact", content="Important fact", tags=["test"])
         created = await store.create(mem)
 
         db._data[created.id] = {
@@ -174,22 +172,24 @@ class TestMemoryExtractor:
         from comobot.agent.episodic.extractor import MemoryExtractor
 
         mock_provider.chat.return_value = MagicMock(
-            content=json.dumps({
-                "memories": [
-                    {
-                        "type": "fact",
-                        "content": "User uses PostgreSQL 14",
-                        "confidence": 0.9,
-                        "tags": ["database"],
-                    },
-                    {
-                        "type": "preference",
-                        "content": "User prefers functional style",
-                        "confidence": 0.8,
-                        "tags": ["coding"],
-                    },
-                ]
-            })
+            content=json.dumps(
+                {
+                    "memories": [
+                        {
+                            "type": "fact",
+                            "content": "User uses PostgreSQL 14",
+                            "confidence": 0.9,
+                            "tags": ["database"],
+                        },
+                        {
+                            "type": "preference",
+                            "content": "User prefers functional style",
+                            "confidence": 0.8,
+                            "tags": ["coding"],
+                        },
+                    ]
+                }
+            )
         )
 
         extractor = MemoryExtractor(mock_store, mock_provider, confidence_threshold=0.6)
@@ -209,12 +209,14 @@ class TestMemoryExtractor:
         from comobot.agent.episodic.extractor import MemoryExtractor
 
         mock_provider.chat.return_value = MagicMock(
-            content=json.dumps({
-                "memories": [
-                    {"type": "fact", "content": "Maybe...", "confidence": 0.3, "tags": []},
-                    {"type": "fact", "content": "Definitely", "confidence": 0.9, "tags": []},
-                ]
-            })
+            content=json.dumps(
+                {
+                    "memories": [
+                        {"type": "fact", "content": "Maybe...", "confidence": 0.3, "tags": []},
+                        {"type": "fact", "content": "Definitely", "confidence": 0.9, "tags": []},
+                    ]
+                }
+            )
         )
 
         extractor = MemoryExtractor(mock_store, mock_provider, confidence_threshold=0.6)
@@ -248,15 +250,15 @@ class TestMemoryExtractor:
     async def test_extract_skips_process_messages(self, mock_provider, mock_store):
         from comobot.agent.episodic.extractor import MemoryExtractor
 
-        mock_provider.chat.return_value = MagicMock(
-            content=json.dumps({"memories": []})
-        )
+        mock_provider.chat.return_value = MagicMock(content=json.dumps({"memories": []}))
         extractor = MemoryExtractor(mock_store, mock_provider)
-        await extractor.extract([
-            {"role": "user", "content": "Hello"},
-            {"role": "process", "content": '{"type": "plan"}'},
-            {"role": "assistant", "content": "Hi"},
-        ])
+        await extractor.extract(
+            [
+                {"role": "user", "content": "Hello"},
+                {"role": "process", "content": '{"type": "plan"}'},
+                {"role": "assistant", "content": "Hi"},
+            ]
+        )
         # Verify process messages were filtered in conversation
         call_args = mock_provider.chat.call_args
         user_content = call_args.kwargs["messages"][1]["content"]
@@ -265,11 +267,13 @@ class TestMemoryExtractor:
     def test_format_conversation(self):
         from comobot.agent.episodic.extractor import MemoryExtractor
 
-        result = MemoryExtractor._format_conversation([
-            {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": "Hi there"},
-            {"role": "process", "content": "skip me"},
-        ])
+        result = MemoryExtractor._format_conversation(
+            [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi there"},
+                {"role": "process", "content": "skip me"},
+            ]
+        )
         assert "user: Hello" in result
         assert "assistant: Hi there" in result
         assert "process" not in result

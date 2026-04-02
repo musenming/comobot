@@ -100,9 +100,7 @@ class ToolCircuitBreaker:
     def build_intervention(self, tool_name: str) -> str:
         """Build a structured intervention message when a tool is circuit-broken."""
         alternatives = [
-            alt
-            for alt in self._alternatives.get(tool_name, [])
-            if not self.is_tripped(alt)
+            alt for alt in self._alternatives.get(tool_name, []) if not self.is_tripped(alt)
         ]
         if alternatives:
             return (

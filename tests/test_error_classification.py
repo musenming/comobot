@@ -198,7 +198,6 @@ class TestRetryLogic:
     async def test_network_error_retried(self, provider):
         import litellm
 
-
         exc = litellm.APIConnectionError(
             message="Connection refused",
             model="gpt-4o",
@@ -227,11 +226,14 @@ class TestRetryLogic:
             choices = [FakeChoice()]
             usage = FakeUsage()
 
-        with patch(
-            "comobot.providers.litellm_provider.acompletion",
-            new_callable=AsyncMock,
-            side_effect=[exc, FakeResp()],
-        ) as mock_call, patch("comobot.providers.litellm_provider.asyncio.sleep", new_callable=AsyncMock):
+        with (
+            patch(
+                "comobot.providers.litellm_provider.acompletion",
+                new_callable=AsyncMock,
+                side_effect=[exc, FakeResp()],
+            ) as mock_call,
+            patch("comobot.providers.litellm_provider.asyncio.sleep", new_callable=AsyncMock),
+        ):
             result = await provider.chat(
                 messages=[{"role": "user", "content": "test"}],
                 model="gpt-4o",
@@ -249,11 +251,14 @@ class TestRetryLogic:
             model="gpt-4o",
             llm_provider="openai",
         )
-        with patch(
-            "comobot.providers.litellm_provider.acompletion",
-            new_callable=AsyncMock,
-            side_effect=exc,
-        ) as mock_call, patch("comobot.providers.litellm_provider.asyncio.sleep", new_callable=AsyncMock):
+        with (
+            patch(
+                "comobot.providers.litellm_provider.acompletion",
+                new_callable=AsyncMock,
+                side_effect=exc,
+            ) as mock_call,
+            patch("comobot.providers.litellm_provider.asyncio.sleep", new_callable=AsyncMock),
+        ):
             result = await provider.chat(
                 messages=[{"role": "user", "content": "test"}],
                 model="gpt-4o",
@@ -271,11 +276,14 @@ class TestRetryLogic:
             model="gpt-4o",
             llm_provider="openai",
         )
-        with patch(
-            "comobot.providers.litellm_provider.acompletion",
-            new_callable=AsyncMock,
-            side_effect=exc,
-        ) as mock_call, patch("comobot.providers.litellm_provider.asyncio.sleep", new_callable=AsyncMock):
+        with (
+            patch(
+                "comobot.providers.litellm_provider.acompletion",
+                new_callable=AsyncMock,
+                side_effect=exc,
+            ) as mock_call,
+            patch("comobot.providers.litellm_provider.asyncio.sleep", new_callable=AsyncMock),
+        ):
             result = await provider.chat(
                 messages=[{"role": "user", "content": "test"}],
                 model="gpt-4o",
@@ -294,9 +302,7 @@ class TestPerProviderKeyFiltering:
         messages = [
             {"role": "tool", "tool_call_id": "tc1", "name": "read_file", "content": "data"},
         ]
-        result = _strip_non_standard_keys(
-            messages, excluded_keys=frozenset({"name"})
-        )
+        result = _strip_non_standard_keys(messages, excluded_keys=frozenset({"name"}))
         assert len(result) == 1
         assert "name" not in result[0]
         assert result[0]["tool_call_id"] == "tc1"
@@ -343,8 +349,6 @@ class TestLLMResponseErrorType:
     def test_error_type_set(self):
         from comobot.providers.base import LLMResponse
 
-        r = LLMResponse(
-            content="error", finish_reason="error", error_type="content_safety"
-        )
+        r = LLMResponse(content="error", finish_reason="error", error_type="content_safety")
         assert r.error_type == "content_safety"
         assert r.finish_reason == "error"

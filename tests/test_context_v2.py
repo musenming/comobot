@@ -28,9 +28,7 @@ class TestContextBuilderV2:
         assert "Workspace" in prompt
 
     def test_build_system_prompt_with_plan_context(self, builder):
-        prompt = builder.build_system_prompt(
-            plan_context="Step 1: Research\nStep 2: Implement"
-        )
+        prompt = builder.build_system_prompt(plan_context="Step 1: Research\nStep 2: Implement")
         assert "Current Task Plan" in prompt
         assert "Step 1: Research" in prompt
 

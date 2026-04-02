@@ -20,7 +20,9 @@ class TestTryParseStructured:
     """Tests for the enhanced JSON parser."""
 
     def test_basic_fenced_json(self):
-        text = 'Some content here.\n```json\n{"summary": "found 3 files", "findings": ["a", "b"]}\n```'
+        text = (
+            'Some content here.\n```json\n{"summary": "found 3 files", "findings": ["a", "b"]}\n```'
+        )
         result = _try_parse_structured(text)
         assert result is not None
         assert result["summary"] == "found 3 files"

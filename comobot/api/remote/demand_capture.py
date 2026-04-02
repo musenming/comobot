@@ -23,10 +23,10 @@ from loguru import logger
 # ---------------------------------------------------------------------------
 # Trigger thresholds (Strategy B: accumulate before calling LLM)
 # ---------------------------------------------------------------------------
-MIN_SENTENCES_FOR_ANALYSIS = 2       # At least N confirmed sentences before first LLM call
-MIN_CHARS_FOR_ANALYSIS = 15          # OR at least N chars of confirmed text
-ANALYSIS_COOLDOWN_SEC = 3.0          # Don't re-analyze more often than this
-MIN_NEW_CHARS_FOR_REANALYSIS = 10    # Need at least N new chars since last analysis
+MIN_SENTENCES_FOR_ANALYSIS = 2  # At least N confirmed sentences before first LLM call
+MIN_CHARS_FOR_ANALYSIS = 15  # OR at least N chars of confirmed text
+ANALYSIS_COOLDOWN_SEC = 3.0  # Don't re-analyze more often than this
+MIN_NEW_CHARS_FOR_REANALYSIS = 10  # Need at least N new chars since last analysis
 
 
 # ---------------------------------------------------------------------------
@@ -138,8 +138,7 @@ class DemandCaptureSession:
 
         # Must have enough content
         has_enough = (
-            self._sentence_count >= MIN_SENTENCES_FOR_ANALYSIS
-            or text_len >= MIN_CHARS_FOR_ANALYSIS
+            self._sentence_count >= MIN_SENTENCES_FOR_ANALYSIS or text_len >= MIN_CHARS_FOR_ANALYSIS
         )
         if not has_enough:
             return False
@@ -239,7 +238,11 @@ class DemandCaptureSession:
                     if result.has_demand and result.confidence >= 0.6 and self._on_demand:
                         await self._on_demand(result)
                 except Exception as e:
-                    logger.warning("[DemandCapture] device={} final analysis failed: {}", self.device_id[:12], e)
+                    logger.warning(
+                        "[DemandCapture] device={} final analysis failed: {}",
+                        self.device_id[:12],
+                        e,
+                    )
 
         return self._latest_result
 
@@ -249,9 +252,7 @@ class DemandCaptureSession:
 # ---------------------------------------------------------------------------
 
 
-async def _call_llm(
-    provider, transcript: str, context_lines: str = ""
-) -> DemandCaptureResult:
+async def _call_llm(provider, transcript: str, context_lines: str = "") -> DemandCaptureResult:
     """Call LLM with demand capture prompt and parse structured result."""
     context_block = ""
     if context_lines:

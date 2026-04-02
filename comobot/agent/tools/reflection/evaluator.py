@@ -12,7 +12,9 @@ class ToolChecker(Protocol):
     """Protocol for tool-specific quality checkers."""
 
     def applies_to(self, tool_name: str) -> bool: ...
-    def check(self, tool_name: str, params: dict, result: str, elapsed_ms: float) -> list[Issue]: ...
+    def check(
+        self, tool_name: str, params: dict, result: str, elapsed_ms: float
+    ) -> list[Issue]: ...
 
 
 # ---------------------------------------------------------------------------
@@ -209,9 +211,7 @@ class ToolResultEvaluator:
     def __init__(self, checkers: list[ToolChecker] | None = None):
         self._checkers = checkers or list(_DEFAULT_CHECKERS)
 
-    def evaluate(
-        self, tool_name: str, params: dict, result: str, elapsed_ms: float
-    ) -> EvalResult:
+    def evaluate(self, tool_name: str, params: dict, result: str, elapsed_ms: float) -> EvalResult:
         all_issues: list[Issue] = []
         for checker in self._checkers:
             if checker.applies_to(tool_name):

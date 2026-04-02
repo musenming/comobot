@@ -19,17 +19,58 @@ MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB per file
 MAX_FILES_PER_REQUEST = 10
 ALLOWED_EXTENSIONS = {
     # Documents
-    ".txt", ".md", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv", ".json", ".xml", ".yaml",
-    ".yml", ".html", ".htm", ".rtf", ".log",
+    ".txt",
+    ".md",
+    ".pdf",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".csv",
+    ".json",
+    ".xml",
+    ".yaml",
+    ".yml",
+    ".html",
+    ".htm",
+    ".rtf",
+    ".log",
     # Images
-    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".svg",
+    ".bmp",
+    ".ico",
     # Code
-    ".py", ".js", ".ts", ".jsx", ".tsx", ".vue", ".css", ".scss", ".java", ".go", ".rs",
-    ".cpp", ".c", ".h", ".sh", ".sql",
+    ".py",
+    ".js",
+    ".ts",
+    ".jsx",
+    ".tsx",
+    ".vue",
+    ".css",
+    ".scss",
+    ".java",
+    ".go",
+    ".rs",
+    ".cpp",
+    ".c",
+    ".h",
+    ".sh",
+    ".sql",
     # Archives
-    ".zip", ".tar", ".gz",
+    ".zip",
+    ".tar",
+    ".gz",
     # Audio
-    ".mp3", ".wav", ".ogg", ".m4a", ".flac",
+    ".mp3",
+    ".wav",
+    ".ogg",
+    ".m4a",
+    ".flac",
 }
 
 SESSION_PREFIX = "web:"
@@ -61,7 +102,9 @@ async def upload_chat_files(
         # Read and validate size
         content = await file.read()
         if len(content) > MAX_FILE_SIZE:
-            raise HTTPException(400, f"File too large (max {MAX_FILE_SIZE // 1024 // 1024}MB): {file.filename}")
+            raise HTTPException(
+                400, f"File too large (max {MAX_FILE_SIZE // 1024 // 1024}MB): {file.filename}"
+            )
 
         # Generate unique filename
         file_id = uuid.uuid4().hex[:12]
@@ -73,13 +116,15 @@ async def upload_chat_files(
         # Detect MIME type
         mime = file.content_type or mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
 
-        results.append({
-            "id": file_id,
-            "name": safe_name,
-            "size": len(content),
-            "type": mime,
-            "url": f"/api/chat/files/{stored_name}",
-        })
+        results.append(
+            {
+                "id": file_id,
+                "name": safe_name,
+                "size": len(content),
+                "type": mime,
+                "url": f"/api/chat/files/{stored_name}",
+            }
+        )
 
     return results
 

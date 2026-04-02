@@ -95,25 +95,27 @@ class TestTaskPlanner:
         from comobot.agent.planning.planner import TaskPlanner
 
         mock_provider.chat.return_value = MagicMock(
-            content=json.dumps({
-                "goal": "Research and implement",
-                "steps": [
-                    {
-                        "id": "step_1",
-                        "description": "Research the topic",
-                        "agent_type": "researcher",
-                        "dependencies": [],
-                        "tools_hint": ["web_search"],
-                    },
-                    {
-                        "id": "step_2",
-                        "description": "Write code",
-                        "agent_type": "coder",
-                        "dependencies": ["step_1"],
-                        "tools_hint": ["write_file"],
-                    },
-                ],
-            })
+            content=json.dumps(
+                {
+                    "goal": "Research and implement",
+                    "steps": [
+                        {
+                            "id": "step_1",
+                            "description": "Research the topic",
+                            "agent_type": "researcher",
+                            "dependencies": [],
+                            "tools_hint": ["web_search"],
+                        },
+                        {
+                            "id": "step_2",
+                            "description": "Write code",
+                            "agent_type": "coder",
+                            "dependencies": ["step_1"],
+                            "tools_hint": ["write_file"],
+                        },
+                    ],
+                }
+            )
         )
 
         planner = TaskPlanner(mock_provider, max_steps=6)
@@ -175,10 +177,12 @@ class TestTaskPlanner:
         from comobot.agent.planning.planner import TaskPlanner
 
         mock_provider.chat.return_value = MagicMock(
-            content=json.dumps({
-                "goal": "Continue work",
-                "steps": [{"id": "step_1", "description": "Finish up"}],
-            })
+            content=json.dumps(
+                {
+                    "goal": "Continue work",
+                    "steps": [{"id": "step_1", "description": "Finish up"}],
+                }
+            )
         )
         planner = TaskPlanner(mock_provider)
         _ = await planner.plan("Continue", bootstrap="Prior search results here")
@@ -329,11 +333,13 @@ class TestReflector:
         # Three LLM calls: reflector evaluation + synthesis + plan_summary
         mock_provider.chat.side_effect = [
             MagicMock(
-                content=json.dumps({
-                    "satisfied": True,
-                    "summary": "All steps completed successfully.",
-                    "revisions": [],
-                })
+                content=json.dumps(
+                    {
+                        "satisfied": True,
+                        "summary": "All steps completed successfully.",
+                        "revisions": [],
+                    }
+                )
             ),
             LLMResponse(content="Synthesized: Done.", finish_reason="stop"),
             LLMResponse(content="Plan executed step s1 successfully.", finish_reason="stop"),
@@ -354,11 +360,13 @@ class TestReflector:
         from comobot.agent.planning.reflector import Reflector
 
         mock_provider.chat.return_value = MagicMock(
-            content=json.dumps({
-                "satisfied": False,
-                "summary": "Step 1 missed key info.",
-                "revisions": ["s1"],
-            })
+            content=json.dumps(
+                {
+                    "satisfied": False,
+                    "summary": "Step 1 missed key info.",
+                    "revisions": ["s1"],
+                }
+            )
         )
         reflector = Reflector(mock_provider)
         plan = TaskPlan(

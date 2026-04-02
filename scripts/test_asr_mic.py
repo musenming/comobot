@@ -52,7 +52,9 @@ async def main():
         print("ERROR: No active ASR provider configured.")
         sys.exit(1)
 
-    print(f"   Provider: {config.asr.provider} (mode={config.asr.providers[config.asr.provider].mode})")
+    print(
+        f"   Provider: {config.asr.provider} (mode={config.asr.providers[config.asr.provider].mode})"
+    )
 
     service = ASRService(config.asr)
     try:

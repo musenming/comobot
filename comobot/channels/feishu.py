@@ -712,9 +712,7 @@ class FeishuChannel(BaseChannel):
             return None
 
         if not self._asr_service.config.enabled:
-            logger.warning(
-                "收到语音消息但 ASR 未启用，请在 provider 设置中启用 ASR 服务"
-            )
+            logger.warning("收到语音消息但 ASR 未启用，请在 provider 设置中启用 ASR 服务")
             return None
 
         try:

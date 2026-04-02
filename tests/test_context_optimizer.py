@@ -61,7 +61,10 @@ class TestTaskClassifier:
 
     def test_follow_up_with_reference(self):
         msg = "继续上面的工作"
-        assert TaskClassifier.classify(msg, history=[{"role": "user"}, {"role": "assistant"}] * 3) == TaskType.FOLLOW_UP
+        assert (
+            TaskClassifier.classify(msg, history=[{"role": "user"}, {"role": "assistant"}] * 3)
+            == TaskType.FOLLOW_UP
+        )
 
     def test_follow_up_with_pronoun(self):
         msg = "把它改成异步的"
@@ -198,7 +201,9 @@ class TestHistoryOptimizer:
     def test_relevant_old_turns_preserved(self):
         """Old turns that are relevant to current query should score higher."""
         history = (
-            _make_turn("explain Python GIL", "The GIL is a mutex that protects access to Python objects...")
+            _make_turn(
+                "explain Python GIL", "The GIL is a mutex that protects access to Python objects..."
+            )
             + _make_turn("what's for lunch?", "I'm an AI, I don't eat lunch")
             + _make_turn("how is the weather?", "I can't check real-time weather")
         )
@@ -210,10 +215,22 @@ class TestHistoryOptimizer:
     def test_tool_results_compressed_in_medium_score(self):
         """Tool results in medium-score turns should be truncated."""
         long_result = "x" * 500
-        tool_calls = [{"id": "tc1", "type": "function", "function": {"name": "web_search", "arguments": "{}"}}]
-        tool_result = {"role": "tool", "tool_call_id": "tc1", "name": "web_search", "content": long_result}
+        tool_calls = [
+            {"id": "tc1", "type": "function", "function": {"name": "web_search", "arguments": "{}"}}
+        ]
+        tool_result = {
+            "role": "tool",
+            "tool_call_id": "tc1",
+            "name": "web_search",
+            "content": long_result,
+        }
 
-        history = _make_turn("old irrelevant query", "Let me search", tool_calls=tool_calls, tool_results=[tool_result])
+        history = _make_turn(
+            "old irrelevant query",
+            "Let me search",
+            tool_calls=tool_calls,
+            tool_results=[tool_result],
+        )
         # Add a more recent turn to push the old one into medium/low score territory
         history.extend(_make_turn("something else", "ok"))
         history.extend(_make_turn("another thing", "sure"))
@@ -263,7 +280,17 @@ class TestHistoryOptimizer:
             {"role": "user", "content": "q1"},
             {"role": "assistant", "content": "a1"},
             {"role": "user", "content": "q2"},
-            {"role": "assistant", "content": "a2", "tool_calls": [{"id": "tc1", "type": "function", "function": {"name": "exec", "arguments": "{}"}}]},
+            {
+                "role": "assistant",
+                "content": "a2",
+                "tool_calls": [
+                    {
+                        "id": "tc1",
+                        "type": "function",
+                        "function": {"name": "exec", "arguments": "{}"},
+                    }
+                ],
+            },
             {"role": "tool", "tool_call_id": "tc1", "content": "result"},
         ]
         turns = HistoryOptimizer._group_into_turns(history)
@@ -382,7 +409,13 @@ class TestSafetyTrim:
             {
                 "role": "assistant",
                 "content": None,
-                "tool_calls": [{"id": "tc1", "type": "function", "function": {"name": "exec", "arguments": "{}"}}],
+                "tool_calls": [
+                    {
+                        "id": "tc1",
+                        "type": "function",
+                        "function": {"name": "exec", "arguments": "{}"},
+                    }
+                ],
             },
             {"role": "tool", "tool_call_id": "tc1", "content": "result"},
             {"role": "user", "content": "thanks"},

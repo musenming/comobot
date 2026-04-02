@@ -747,7 +747,9 @@ class AgentLoop:
                             "Network error after retries. Please check your connection."
                         )
                     else:
-                        final_content = clean or "Sorry, I encountered an error calling the AI model."
+                        final_content = (
+                            clean or "Sorry, I encountered an error calling the AI model."
+                        )
                     break
 
                 # Strip <thought> from final answer unless show_thinking is on

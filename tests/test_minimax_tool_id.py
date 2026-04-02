@@ -124,9 +124,7 @@ async def test_tool_call_id_preserved_in_history(mock_llm_provider):
 
     # Turn 1: MiniMax returns a tool call
     minimax_id = "call_function_abc123_1"
-    fake_resp = make_minimax_tool_call_response(
-        minimax_id, "read_file", '{"path": "test.txt"}'
-    )
+    fake_resp = make_minimax_tool_call_response(minimax_id, "read_file", '{"path": "test.txt"}')
 
     with patch(
         "comobot.providers.litellm_provider.acompletion",
@@ -210,21 +208,37 @@ async def test_multiple_tool_calls_same_turn(mock_llm_provider):
             "type": "function",
             "function": {
                 "name": "list_dir",
-                "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
+                "parameters": {
+                    "type": "object",
+                    "properties": {"path": {"type": "string"}},
+                    "required": ["path"],
+                },
             },
         },
         {
             "type": "function",
             "function": {
                 "name": "read_file",
-                "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
+                "parameters": {
+                    "type": "object",
+                    "properties": {"path": {"type": "string"}},
+                    "required": ["path"],
+                },
             },
         },
     ]
 
     # Two tool calls
-    tc1 = ChatCompletionMessageToolCall(id="call_function_list1_1", type="function", function={"name": "list_dir", "arguments": '{"path": "."}'})
-    tc2 = ChatCompletionMessageToolCall(id="call_function_read1_1", type="function", function={"name": "read_file", "arguments": '{"path": "config.json"}'})
+    tc1 = ChatCompletionMessageToolCall(
+        id="call_function_list1_1",
+        type="function",
+        function={"name": "list_dir", "arguments": '{"path": "."}'},
+    )
+    tc2 = ChatCompletionMessageToolCall(
+        id="call_function_read1_1",
+        type="function",
+        function={"name": "read_file", "arguments": '{"path": "config.json"}'},
+    )
 
     class FakeMessage:  # noqa: N801
         def __init__(self):
@@ -263,8 +277,18 @@ async def test_multiple_tool_calls_same_turn(mock_llm_provider):
     assert response.tool_calls[1].id == "call_function_read1_1"
 
     # Verify tool results maintain correct IDs
-    tool_result_1 = {"role": "tool", "tool_call_id": "call_function_list1_1", "name": "list_dir", "content": "file1.py\nfile2.py"}
-    tool_result_2 = {"role": "tool", "tool_call_id": "call_function_read1_1", "name": "read_file", "content": '{"setting": true}'}
+    tool_result_1 = {
+        "role": "tool",
+        "tool_call_id": "call_function_list1_1",
+        "name": "list_dir",
+        "content": "file1.py\nfile2.py",
+    }
+    tool_result_2 = {
+        "role": "tool",
+        "tool_call_id": "call_function_read1_1",
+        "name": "read_file",
+        "content": '{"setting": true}',
+    }
 
     assert tool_result_1["tool_call_id"] == "call_function_list1_1"
     assert tool_result_2["tool_call_id"] == "call_function_read1_1"
@@ -278,10 +302,23 @@ async def test_system_to_user_conversion_preserves_tool_calls(mock_llm_provider)
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "Hello"},
-        {"role": "assistant", "content": "Hi!", "tool_calls": [
-            {"id": "call_function_test_1", "type": "function", "function": {"name": "search", "arguments": "{}"}}
-        ]},
-        {"role": "tool", "tool_call_id": "call_function_test_1", "name": "search", "content": "result"},
+        {
+            "role": "assistant",
+            "content": "Hi!",
+            "tool_calls": [
+                {
+                    "id": "call_function_test_1",
+                    "type": "function",
+                    "function": {"name": "search", "arguments": "{}"},
+                }
+            ],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "call_function_test_1",
+            "name": "search",
+            "content": "result",
+        },
     ]
 
     converted = _convert_system_to_user(messages)
@@ -306,13 +343,19 @@ async def test_tool_result_message_format(mock_llm_provider):
         {"role": "user", "content": "Hi"},
     ]
 
-    tools = [{
-        "type": "function",
-        "function": {
-            "name": "echo",
-            "parameters": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]},
-        },
-    }]
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "echo",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"text": {"type": "string"}},
+                    "required": ["text"],
+                },
+            },
+        }
+    ]
 
     minimax_id = "call_function_echo123_1"
     fake_resp = make_minimax_tool_call_response(minimax_id, "echo", '{"text": "hello"}')

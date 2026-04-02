@@ -34,13 +34,15 @@ def test_tool_hint_message_data_path():
     api_tool_calls = json.dumps(db_tool_calls)
 
     # Simulate frontend JSON.parse()
-    frontend_content = json.loads(api_content)  # str: '{"content": "web_fetch", "step_id": "step_3"}'
+    frontend_content = json.loads(
+        api_content
+    )  # str: '{"content": "web_fetch", "step_id": "step_3"}'
     frontend_tool_calls = json.loads(api_tool_calls)
 
     # parseProcessType (frontend equivalent)
     def parse_process_type(raw):
         if not raw:
-            return ''
+            return ""
         if isinstance(raw, str):
             try:
                 parsed = json.loads(raw)
@@ -62,46 +64,58 @@ def test_tool_hint_message_data_path():
                 try:
                     return json.loads(first)
                 except Exception:
-                    return {'content': first}
-            if isinstance(first.get('content'), str) and first['content'].startswith('{'):
+                    return {"content": first}
+            if isinstance(first.get("content"), str) and first["content"].startswith("{"):
                 try:
-                    first['content'] = json.loads(first['content'])
+                    first["content"] = json.loads(first["content"])
                 except Exception:
                     pass
             return first
         except Exception:
-            return {'content': str(raw)}
+            return {"content": str(raw)}
 
     # Simulate frontend message construction (like loadSessionMessages does)
     process_data = parse_process_data(frontend_content)
     msg = {
-        'id': 1,
-        'role': 'process',
-        'content': '',
-        'processType': parse_process_type(frontend_tool_calls),
-        'process_data': process_data,
-        'created_at': '2026-04-01T00:00:00',
+        "id": 1,
+        "role": "process",
+        "content": "",
+        "processType": parse_process_type(frontend_tool_calls),
+        "process_data": process_data,
+        "created_at": "2026-04-01T00:00:00",
     }
 
     # Verify the message structure matches what ProcessMessage.vue expects
-    assert msg['role'] == 'process', f"Expected role='process', got {msg['role']}"
-    assert msg['processType'] == 'tool_hint', f"Expected processType='tool_hint', got {repr(msg['processType'])}"
-    assert isinstance(msg['process_data'], dict), f"Expected process_data to be dict, got {type(msg['process_data'])}"
-    assert msg['process_data']['content'] == 'web_fetch', f"Expected content='web_fetch', got {repr(msg['process_data']['content'])}"
-    assert msg['process_data']['step_id'] == 'step_3', f"Expected step_id='step_3', got {repr(msg['process_data']['step_id'])}"
+    assert msg["role"] == "process", f"Expected role='process', got {msg['role']}"
+    assert msg["processType"] == "tool_hint", (
+        f"Expected processType='tool_hint', got {repr(msg['processType'])}"
+    )
+    assert isinstance(msg["process_data"], dict), (
+        f"Expected process_data to be dict, got {type(msg['process_data'])}"
+    )
+    assert msg["process_data"]["content"] == "web_fetch", (
+        f"Expected content='web_fetch', got {repr(msg['process_data']['content'])}"
+    )
+    assert msg["process_data"]["step_id"] == "step_3", (
+        f"Expected step_id='step_3', got {repr(msg['process_data']['step_id'])}"
+    )
 
     # Verify ProcessMessage.vue rendering path
     # The tool_hint branch: <span class="pm-inline-label">{{ typeof data.content === 'string' ? data.content : JSON.stringify(data.content) }}</span>
-    data = msg['process_data']
-    rendered_content = data['content'] if isinstance(data['content'], str) else json.dumps(data['content'])
-    assert rendered_content == 'web_fetch', f"Expected rendered content='web_fetch', got {repr(rendered_content)}"
+    data = msg["process_data"]
+    rendered_content = (
+        data["content"] if isinstance(data["content"], str) else json.dumps(data["content"])
+    )
+    assert rendered_content == "web_fetch", (
+        f"Expected rendered content='web_fetch', got {repr(rendered_content)}"
+    )
 
     print("✓ tool_hint message data path is correct")
 
 
 def test_thinking_message_data_path():
     """Verify thinking messages are handled correctly."""
-    db_content = '{}'
+    db_content = "{}"
     db_tool_calls = '"thinking"'
 
     api_content = json.dumps(db_content)
@@ -112,7 +126,7 @@ def test_thinking_message_data_path():
 
     def parse_process_type(raw):
         if not raw:
-            return ''
+            return ""
         if isinstance(raw, str):
             try:
                 parsed = json.loads(raw)
@@ -133,42 +147,44 @@ def test_thinking_message_data_path():
                 try:
                     return json.loads(first)
                 except Exception:
-                    return {'content': first}
-            if isinstance(first.get('content'), str) and first['content'].startswith('{'):
+                    return {"content": first}
+            if isinstance(first.get("content"), str) and first["content"].startswith("{"):
                 try:
-                    first['content'] = json.loads(first['content'])
+                    first["content"] = json.loads(first["content"])
                 except Exception:
                     pass
             return first
         except Exception:
-            return {'content': str(raw)}
+            return {"content": str(raw)}
 
     process_data = parse_process_data(frontend_content)
     msg = {
-        'id': 2,
-        'role': 'process',
-        'content': '',
-        'processType': parse_process_type(frontend_tool_calls),
-        'process_data': process_data,
-        'created_at': '2026-04-01T00:00:00',
+        "id": 2,
+        "role": "process",
+        "content": "",
+        "processType": parse_process_type(frontend_tool_calls),
+        "process_data": process_data,
+        "created_at": "2026-04-01T00:00:00",
     }
 
-    assert msg['processType'] == 'thinking'
-    assert msg['process_data'] == {}
+    assert msg["processType"] == "thinking"
+    assert msg["process_data"] == {}
 
     print("✓ thinking message data path is correct")
 
 
 def test_plan_created_message_data_path():
     """Verify plan_created messages with steps are handled correctly."""
-    db_content = json.dumps({
-        'goal': '分析美伊战争',
-        'plan_id': 'plan_1',
-        'steps': [
-            {'id': 'step_1', 'description': '搜索信息', 'status': None},
-            {'id': 'step_2', 'description': '分析数据', 'status': None},
-        ]
-    })
+    db_content = json.dumps(
+        {
+            "goal": "分析美伊战争",
+            "plan_id": "plan_1",
+            "steps": [
+                {"id": "step_1", "description": "搜索信息", "status": None},
+                {"id": "step_2", "description": "分析数据", "status": None},
+            ],
+        }
+    )
     db_tool_calls = '"plan_created"'
 
     api_content = json.dumps(db_content)
@@ -179,7 +195,7 @@ def test_plan_created_message_data_path():
 
     def parse_process_type(raw):
         if not raw:
-            return ''
+            return ""
         if isinstance(raw, str):
             try:
                 parsed = json.loads(raw)
@@ -200,30 +216,30 @@ def test_plan_created_message_data_path():
                 try:
                     return json.loads(first)
                 except Exception:
-                    return {'content': first}
-            if isinstance(first.get('content'), str) and first['content'].startswith('{'):
+                    return {"content": first}
+            if isinstance(first.get("content"), str) and first["content"].startswith("{"):
                 try:
-                    first['content'] = json.loads(first['content'])
+                    first["content"] = json.loads(first["content"])
                 except Exception:
                     pass
             return first
         except Exception:
-            return {'content': str(raw)}
+            return {"content": str(raw)}
 
     process_data = parse_process_data(frontend_content)
     msg = {
-        'id': 3,
-        'role': 'process',
-        'content': '',
-        'processType': parse_process_type(frontend_tool_calls),
-        'process_data': process_data,
-        'created_at': '2026-04-01T00:00:00',
+        "id": 3,
+        "role": "process",
+        "content": "",
+        "processType": parse_process_type(frontend_tool_calls),
+        "process_data": process_data,
+        "created_at": "2026-04-01T00:00:00",
     }
 
-    assert msg['processType'] == 'plan_created'
-    assert msg['process_data']['goal'] == '分析美伊战争'
-    assert len(msg['process_data']['steps']) == 2
-    assert msg['process_data']['steps'][0]['id'] == 'step_1'
+    assert msg["processType"] == "plan_created"
+    assert msg["process_data"]["goal"] == "分析美伊战争"
+    assert len(msg["process_data"]["steps"]) == 2
+    assert msg["process_data"]["steps"][0]["id"] == "step_1"
 
     print("✓ plan_created message data path is correct")
 
@@ -238,7 +254,7 @@ def test_tool_hint_with_exec_content():
 
     def parse_process_type(raw):
         if not raw:
-            return ''
+            return ""
         if isinstance(raw, str):
             try:
                 parsed = json.loads(raw)
@@ -259,34 +275,34 @@ def test_tool_hint_with_exec_content():
                 try:
                     return json.loads(first)
                 except Exception:
-                    return {'content': first}
-            if isinstance(first.get('content'), str) and first['content'].startswith('{'):
+                    return {"content": first}
+            if isinstance(first.get("content"), str) and first["content"].startswith("{"):
                 try:
-                    first['content'] = json.loads(first['content'])
+                    first["content"] = json.loads(first["content"])
                 except Exception:
                     pass
             return first
         except Exception:
-            return {'content': str(raw)}
+            return {"content": str(raw)}
 
     process_data = parse_process_data(frontend_content)
 
     # The content is a string (exec command), not a JSON object
-    assert isinstance(process_data['content'], str)
-    assert 'exec' in process_data['content']
-    assert process_data['step_id'] == 'step_3'
+    assert isinstance(process_data["content"], str)
+    assert "exec" in process_data["content"]
+    assert process_data["step_id"] == "step_3"
 
     # Verify ProcessMessage.vue rendering: typeof data.content === 'string' is True
     # So it would display: data.content (the exec string)
     data = process_data
-    rendered = data['content'] if isinstance(data['content'], str) else json.dumps(data['content'])
+    rendered = data["content"] if isinstance(data["content"], str) else json.dumps(data["content"])
     assert isinstance(rendered, str)
-    assert 'exec' in rendered
+    assert "exec" in rendered
 
     print("✓ tool_hint with exec content is handled correctly")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_tool_hint_message_data_path()
     test_thinking_message_data_path()
     test_plan_created_message_data_path()

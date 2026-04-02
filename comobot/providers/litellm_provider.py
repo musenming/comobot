@@ -81,6 +81,8 @@ def _classify_error(exc: Exception) -> str | None:
             return "content_safety"
         return "network"
     return None
+
+
 # ---------------------------------------------------------------------------
 
 
@@ -426,7 +428,10 @@ class LiteLLMProvider(LLMProvider):
                     delay = (attempt + 1) * 1.0  # 1s, 2s
                     logger.info(
                         "LLM transient error ({}), retry {}/2 in {}s: {}",
-                        error_type, attempt + 1, delay, str(e)[:100],
+                        error_type,
+                        attempt + 1,
+                        delay,
+                        str(e)[:100],
                     )
                     await asyncio.sleep(delay)
                     try:
@@ -475,7 +480,6 @@ class LiteLLMProvider(LLMProvider):
         tool_calls = []
         if hasattr(message, "tool_calls") and message.tool_calls:
             for tc in message.tool_calls:
-
                 # Extract function.name and function.arguments
                 # tc.function is itself a TypedDict/model with 'name' and 'arguments' fields
                 func = self._get_tool_field(tc, "function") or {}

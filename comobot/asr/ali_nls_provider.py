@@ -145,7 +145,9 @@ class AliNlsStreamSession(ASRStreamSession):
                         try:
                             on_intermediate(full, self._sentence_idx, True)
                         except Exception as exc:
-                            logger.error("[AliNLS-stream] on_intermediate FINAL callback error: {}", exc)
+                            logger.error(
+                                "[AliNLS-stream] on_intermediate FINAL callback error: {}", exc
+                            )
             except Exception as e:
                 logger.warning("[AliNLS-stream] parse sentence_end failed: {}", e)
 
@@ -166,7 +168,9 @@ class AliNlsStreamSession(ASRStreamSession):
                         try:
                             on_intermediate(full, self._sentence_idx, False)
                         except Exception as exc:
-                            logger.error("[AliNLS-stream] on_intermediate PARTIAL callback error: {}", exc)
+                            logger.error(
+                                "[AliNLS-stream] on_intermediate PARTIAL callback error: {}", exc
+                            )
             except Exception as exc:
                 logger.warning("[AliNLS-stream] parse result_changed failed: {}", exc)
 

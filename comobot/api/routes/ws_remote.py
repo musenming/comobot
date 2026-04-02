@@ -550,9 +550,7 @@ async def _handle_voice_audio_stream(
                         },
                     )
                 except Exception as exc:
-                    logger.error(
-                        "[DemandCapture] send demand_detected FAILED: {}", exc
-                    )
+                    logger.error("[DemandCapture] send demand_detected FAILED: {}", exc)
 
             stream.demand_capture = DemandCaptureSession(
                 device_id=device_id,

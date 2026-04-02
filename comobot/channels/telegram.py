@@ -146,9 +146,7 @@ class TelegramChannel(BaseChannel):
             return None
 
         if not self._asr_service.config.enabled:
-            logger.warning(
-                "收到语音消息但 ASR 未启用，请在 provider 设置中启用 ASR 服务"
-            )
+            logger.warning("收到语音消息但 ASR 未启用，请在 provider 设置中启用 ASR 服务")
             return None
 
         try:
@@ -545,14 +543,18 @@ class TelegramChannel(BaseChannel):
         err = context.error
         err_name = type(err).__name__
         # Network-related errors: log as warning without traceback
-        if err_name in (
-            "NetworkError",
-            "TimedOut",
-            "RetryAfter",
-            "RemoteProtocolError",
-            "ConnectError",
-            "ReadTimeout",
-        ) or "disconnect" in str(err).lower():
+        if (
+            err_name
+            in (
+                "NetworkError",
+                "TimedOut",
+                "RetryAfter",
+                "RemoteProtocolError",
+                "ConnectError",
+                "ReadTimeout",
+            )
+            or "disconnect" in str(err).lower()
+        ):
             logger.warning("Telegram network error ({}): {}", err_name, err)
         else:
             logger.error("Telegram error ({}): {}", err_name, err)

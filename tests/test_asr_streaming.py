@@ -61,9 +61,7 @@ class MockStreamSession(ASRStreamSession):
                 self._confirmed_sentences.append(partial_text)
                 self._on_intermediate(partial_text, len(self._confirmed_sentences), True)
             else:
-                self._on_intermediate(
-                    partial_text, len(self._confirmed_sentences), False
-                )
+                self._on_intermediate(partial_text, len(self._confirmed_sentences), False)
 
             # Small delay to simulate real processing
             await asyncio.sleep(0.01)
@@ -119,16 +117,16 @@ class TestStreamingASR:
         timestamps: list[float] = []
 
         def on_intermediate(text: str, sentence_idx: int, is_final: bool) -> None:
-            intermediate_events.append({
-                "text": text,
-                "sentence_idx": sentence_idx,
-                "is_final": is_final,
-            })
+            intermediate_events.append(
+                {
+                    "text": text,
+                    "sentence_idx": sentence_idx,
+                    "is_final": is_final,
+                }
+            )
             timestamps.append(time.monotonic())
 
-        session = await asr_service.start_stream(
-            language="zh", on_intermediate=on_intermediate
-        )
+        session = await asr_service.start_stream(language="zh", on_intermediate=on_intermediate)
 
         # Feed 4 chunks (simulating ~800ms of audio in 200ms intervals)
         for _ in range(4):
@@ -150,8 +148,9 @@ class TestStreamingASR:
         print(f"Final result: '{result.text}'")
         print()
         for i, evt in enumerate(intermediate_events):
-            print(f"  [{i}] text='{evt['text']}' idx={evt['sentence_idx']} "
-                  f"is_final={evt['is_final']}")
+            print(
+                f"  [{i}] text='{evt['text']}' idx={evt['sentence_idx']} is_final={evt['is_final']}"
+            )
 
         # Verify we got both partial and final events
         partials = [e for e in intermediate_events if not e["is_final"]]
@@ -174,9 +173,7 @@ class TestStreamingASR:
         def on_intermediate(text: str, sentence_idx: int, is_final: bool) -> None:
             events.append({"text": text})
 
-        session = await asr_service.start_stream(
-            language="zh", on_intermediate=on_intermediate
-        )
+        session = await asr_service.start_stream(language="zh", on_intermediate=on_intermediate)
 
         await session.feed(make_pcm_chunk(200))
         count_before_cancel = len(events)
@@ -217,17 +214,17 @@ class TestStreamingWSFlow:
         language = "zh"
 
         def on_intermediate(text: str, sentence_idx: int, is_final: bool) -> None:
-            pushed_events.append({
-                "t": "asr_intermediate",
-                "request_id": request_id,
-                "text": text,
-                "sentence_idx": sentence_idx,
-                "is_final": is_final,
-            })
+            pushed_events.append(
+                {
+                    "t": "asr_intermediate",
+                    "request_id": request_id,
+                    "text": text,
+                    "sentence_idx": sentence_idx,
+                    "is_final": is_final,
+                }
+            )
 
-        session = await asr_service.start_stream(
-            language=language, on_intermediate=on_intermediate
-        )
+        session = await asr_service.start_stream(language=language, on_intermediate=on_intermediate)
 
         # Simulate chunk feeding (what happens on each voice_audio chunk command)
         total_bytes = 0
@@ -347,12 +344,11 @@ class TestWSHandlerIntegration:
 
         try:
             # 1. START — opens live ASR session
-            await _handle_voice_audio_stream(
-                app, device_id, request_id, "start", None, "zh"
-            )
+            await _handle_voice_audio_stream(app, device_id, request_id, "start", None, "zh")
 
             # Verify stream was created with a live session
             from comobot.api.routes.ws_remote import _stream_key
+
             key = _stream_key(device_id, request_id)
             assert key in _audio_streams
             stream = _audio_streams[key]
@@ -370,15 +366,12 @@ class TestWSHandlerIntegration:
                 await asyncio.sleep(0.05)
 
             # Verify intermediate events were pushed DURING chunk feeding
-            intermediate_events = [
-                e for e in sent_events if e.get("t") == "asr_intermediate"
-            ]
+            intermediate_events = [e for e in sent_events if e.get("t") == "asr_intermediate"]
             print("\n--- Integration Pipeline Test ---")
             print(f"Events sent during chunks: {len(intermediate_events)}")
             for evt in intermediate_events:
                 status = "FINAL" if evt.get("is_final") else "partial"
-                print(f"  → [{status}] '{evt['text']}' "
-                      f"(sentence_idx={evt['sentence_idx']})")
+                print(f"  → [{status}] '{evt['text']}' (sentence_idx={evt['sentence_idx']})")
 
             assert len(intermediate_events) > 0, (
                 "CRITICAL: No asr_intermediate events were pushed during chunk feeding! "
@@ -400,9 +393,7 @@ class TestWSHandlerIntegration:
             assert has_final, "Missing final (confirmed) results"
 
             # 3. END — finishes session, sends asr_result
-            await _handle_voice_audio_stream(
-                app, device_id, request_id, "end", None, "zh"
-            )
+            await _handle_voice_audio_stream(app, device_id, request_id, "end", None, "zh")
             await asyncio.sleep(0.05)
 
             # Verify final asr_result was sent
