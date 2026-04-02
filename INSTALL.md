@@ -108,6 +108,9 @@ cd web && npm install && npm run build && cd ..
 
 # 启动
 comobot gateway
+
+# 重启
+comobot gateway restart
 ```
 
 ---

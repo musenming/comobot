@@ -63,6 +63,24 @@ def _remove_pid_file() -> None:
         pid_file.unlink(missing_ok=True)
 
 
+def _is_pid_alive(pid: int) -> bool:
+    """Return True if the process with the given PID is alive (cross-platform)."""
+    if sys.platform == "win32":
+        import ctypes
+
+        handle = ctypes.windll.kernel32.OpenProcess(0x1000, 0, pid)
+        if not handle:
+            return False
+        ctypes.windll.kernel32.CloseHandle(handle)
+        return True
+    else:
+        try:
+            os.kill(pid, 0)
+            return True
+        except (ProcessLookupError, PermissionError):
+            return False
+
+
 def _read_pid() -> int | None:
     """Read the gateway PID from the PID file. Returns None if not found or stale."""
     pid_file = _get_pid_file()
@@ -70,10 +88,11 @@ def _read_pid() -> int | None:
         return None
     try:
         pid = int(pid_file.read_text().strip())
-        # Check if process is still running
-        os.kill(pid, 0)
+        # Check if process is still running (cross-platform)
+        if not _is_pid_alive(pid):
+            raise ProcessLookupError(f"Process {pid} not found")
         return pid
-    except (ValueError, ProcessLookupError, PermissionError):
+    except (ValueError, ProcessLookupError, PermissionError, OSError):
         _remove_pid_file()
         return None
 
@@ -96,18 +115,38 @@ def _stop_gateway(port: int = 18790) -> bool:
     # Also try by port as fallback
     my_pid = str(os.getpid())
     try:
-        result = subprocess.run(
-            ["lsof", "-ti", f"tcp:{port}"],
-            capture_output=True,
-            text=True,
-        )
-        for p in result.stdout.strip().splitlines():
-            p = p.strip()
-            if p and p != my_pid:
-                subprocess.run(["kill", p], capture_output=True)
-                if not stopped:
-                    console.print(f"  [green]✓[/green] Stopped process on port {port} (pid={p})")
-                stopped = True
+        if sys.platform == "win32":
+            result = subprocess.run(
+                ["netstat", "-ano"],
+                capture_output=True,
+                text=True,
+            )
+            for line in result.stdout.splitlines():
+                if f":{port}" in line and "LISTENING" in line:
+                    parts = line.split()
+                    p = parts[-1].strip() if parts else ""
+                    if p and p != my_pid:
+                        subprocess.run(["taskkill", "/F", "/PID", p], capture_output=True)
+                        if not stopped:
+                            console.print(
+                                f"  [green]✓[/green] Stopped process on port {port} (pid={p})"
+                            )
+                        stopped = True
+        else:
+            result = subprocess.run(
+                ["lsof", "-ti", f"tcp:{port}"],
+                capture_output=True,
+                text=True,
+            )
+            for p in result.stdout.strip().splitlines():
+                p = p.strip()
+                if p and p != my_pid:
+                    subprocess.run(["kill", p], capture_output=True)
+                    if not stopped:
+                        console.print(
+                            f"  [green]✓[/green] Stopped process on port {port} (pid={p})"
+                        )
+                    stopped = True
     except FileNotFoundError:
         pass
 
@@ -819,13 +858,26 @@ def restart(
         # Wait for the old process to release the port
         for _ in range(30):
             try:
-                result = subprocess.run(
-                    ["lsof", "-ti", f"tcp:{port}"],
-                    capture_output=True,
-                    text=True,
-                )
-                if not result.stdout.strip():
-                    break
+                if sys.platform == "win32":
+                    result = subprocess.run(
+                        ["netstat", "-ano"],
+                        capture_output=True,
+                        text=True,
+                    )
+                    port_in_use = any(
+                        f":{port}" in line and "LISTENING" in line
+                        for line in result.stdout.splitlines()
+                    )
+                    if not port_in_use:
+                        break
+                else:
+                    result = subprocess.run(
+                        ["lsof", "-ti", f"tcp:{port}"],
+                        capture_output=True,
+                        text=True,
+                    )
+                    if not result.stdout.strip():
+                        break
             except FileNotFoundError:
                 break
             time.sleep(0.5)
