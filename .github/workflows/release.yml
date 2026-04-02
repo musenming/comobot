@@ -158,3 +158,79 @@ jobs:
             dist/*.tar.gz
             dist/checksums.txt
           generate_release_notes: true
+
+      # Persist dist/ artifacts so sync-cn-mirror can access them
+      - name: Upload dist for CN sync
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-dist
+          path: dist/
+          if-no-files-found: error
+
+  sync-cn-mirror:
+    name: Sync to CN Mirror (comindx.com)
+    runs-on: ubuntu-latest
+    needs: upload-release
+    # Only run when deploy credentials are configured
+    if: ${{ vars.CN_MIRROR_ENABLED == 'true' }}
+
+    steps:
+      - name: Checkout (for install scripts)
+        uses: actions/checkout@v6
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: release-dist
+          path: dist
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Create remote directories
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          REMOTE="${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}"
+          ssh -i ~/.ssh/deploy_key "$REMOTE" \
+            "mkdir -p /var/www/comobot/releases/v${VERSION} \
+                      /var/www/comobot/releases/latest \
+                      /var/www/comobot/scripts"
+
+      - name: Upload release binaries
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          REMOTE="${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}"
+          rsync -avz --progress \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            dist/ \
+            "${REMOTE}:/var/www/comobot/releases/v${VERSION}/"
+
+      - name: Update version.txt
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          REMOTE="${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}"
+          echo -n "$VERSION" | ssh -i ~/.ssh/deploy_key "$REMOTE" \
+            "cat > /var/www/comobot/releases/latest/version.txt"
+
+      - name: Upload install scripts
+        run: |
+          REMOTE="${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}"
+          rsync -avz -e "ssh -i ~/.ssh/deploy_key" \
+            scripts/install.sh scripts/install.ps1 \
+            "${REMOTE}:/var/www/comobot/scripts/"
+
+      - name: Verify CN mirror
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Wait briefly for nginx to serve the new file
+          sleep 3
+          MIRRORED=$(curl -fsSL "https://dl.comindx.com/releases/latest/version.txt")
+          if [[ "$MIRRORED" != "$VERSION" ]]; then
+            echo "CN mirror version mismatch: expected $VERSION, got $MIRRORED" >&2
+            exit 1
+          fi
+          echo "CN mirror verified: v${VERSION}"

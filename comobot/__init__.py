@@ -9,5 +9,5 @@ import os as _os
 # without a proxy).  Must be set before ``import litellm`` anywhere.
 _os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
 
-__version__ = "0.2.6"
+__version__ = "1.0.2"
 __logo__ = "\u25c8"  # ◈ — safe on all terminals including Windows GBK

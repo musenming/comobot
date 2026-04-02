@@ -1,5 +1,11 @@
 # Comobot Installer for Windows
-# Usage: irm https://raw.githubusercontent.com/musenming/comobot/main/scripts/install.ps1 | iex
+#
+# Global users:
+#   irm https://raw.githubusercontent.com/musenming/comobot/main/scripts/install.ps1 | iex
+#
+# China users (auto-detected, or explicit):
+#   irm https://dl.comobot.cn/scripts/install.ps1 | iex
+#   $env:COMOBOT_MIRROR="cn"; irm https://raw.githubusercontent.com/musenming/comobot/main/scripts/install.ps1 | iex
 #Requires -Version 5.1
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -7,6 +13,7 @@ $ErrorActionPreference = "Stop"
 $REPO = "musenming/comobot"
 $INSTALL_DIR = "$env:LOCALAPPDATA\comobot\bin"
 $DATA_DIR = "$env:USERPROFILE\.comobot"
+$CN_MIRROR_BASE = "https://dl.comindx.com"
 
 function Write-Info { param($msg) Write-Host "[comobot] $msg" -ForegroundColor Cyan }
 function Write-OK   { param($msg) Write-Host "[comobot] $msg" -ForegroundColor Green }
@@ -18,6 +25,21 @@ Write-Host ""
 Write-Info "Comobot Installer"
 Write-Host ""
 
+# ── Mirror auto-detection ────────────────────────────────────────────────────
+$MIRROR = if ($env:COMOBOT_MIRROR) { $env:COMOBOT_MIRROR } else { "" }
+
+if ($MIRROR -ne "cn" -and $MIRROR -ne "github") {
+    # Auto-detect: test GitHub connectivity with a short timeout
+    try {
+        $null = Invoke-WebRequest -Uri "https://github.com" `
+            -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
+        $MIRROR = "github"
+    } catch {
+        Write-Warn "GitHub appears unreachable, switching to CN mirror automatically."
+        $MIRROR = "cn"
+    }
+}
+
 # ── Platform detection ───────────────────────────────────────────────────────
 $arch = if ([Environment]::Is64BitOperatingSystem) {
     if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x64" }
@@ -27,43 +49,54 @@ $arch = if ([Environment]::Is64BitOperatingSystem) {
 $TARGET = "windows-$arch"
 Write-Info "Detected platform: $TARGET"
 
-# ── Fetch latest release URL ────────────────────────────────────────────────
+# ── Fetch latest release info ────────────────────────────────────────────────
 Write-Info "Fetching latest release info..."
 $VERSION = $null
 
-# Primary: resolve version via GitHub redirect (no API, no rate limit)
-try {
-    $response = Invoke-WebRequest -Uri "https://github.com/$REPO/releases/latest" `
-        -MaximumRedirection 0 -ErrorAction SilentlyContinue -UseBasicParsing 2>$null
-} catch {
-    if ($_.Exception.Response.Headers.Location) {
-        $redirectUrl = $_.Exception.Response.Headers.Location.ToString()
-        if ($redirectUrl -match "/tag/v(.+)$") {
-            $VERSION = $Matches[1]
+if ($MIRROR -eq "cn") {
+    # CN mirror: read version.txt
+    try {
+        $VERSION = (Invoke-WebRequest -Uri "$CN_MIRROR_BASE/releases/latest/version.txt" `
+            -UseBasicParsing -TimeoutSec 10).Content.Trim()
+    } catch {
+        Write-Err "Failed to fetch version from CN mirror ($CN_MIRROR_BASE). Please retry later."
+    }
+    $ASSET_NAME = "comobot-$VERSION-$TARGET.tar.gz"
+    $DOWNLOAD_URL = "$CN_MIRROR_BASE/releases/v$VERSION/$ASSET_NAME"
+} else {
+    # GitHub: resolve via redirect, fallback to API
+    try {
+        $response = Invoke-WebRequest -Uri "https://github.com/$REPO/releases/latest" `
+            -MaximumRedirection 0 -ErrorAction SilentlyContinue -UseBasicParsing 2>$null
+    } catch {
+        if ($_.Exception.Response.Headers.Location) {
+            $redirectUrl = $_.Exception.Response.Headers.Location.ToString()
+            if ($redirectUrl -match "/tag/v(.+)$") {
+                $VERSION = $Matches[1]
+            }
         }
     }
-}
 
-# Fallback: use GitHub API
-if (-not $VERSION) {
-    try {
-        $headers = @{}
-        if ($env:GITHUB_TOKEN) {
-            $headers["Authorization"] = "token $env:GITHUB_TOKEN"
+    if (-not $VERSION) {
+        try {
+            $headers = @{}
+            if ($env:GITHUB_TOKEN) {
+                $headers["Authorization"] = "token $env:GITHUB_TOKEN"
+            }
+            $release = Invoke-RestMethod "https://api.github.com/repos/$REPO/releases/latest" -Headers $headers
+            $VERSION = $release.tag_name -replace '^v', ''
+        } catch {
+            Write-Err "Failed to determine latest version. Visit https://github.com/$REPO/releases"
         }
-        $release = Invoke-RestMethod "https://api.github.com/repos/$REPO/releases/latest" -Headers $headers
-        $VERSION = $release.tag_name -replace '^v', ''
-    } catch {
+    }
+
+    if (-not $VERSION) {
         Write-Err "Failed to determine latest version. Visit https://github.com/$REPO/releases"
     }
+    $ASSET_NAME = "comobot-$VERSION-$TARGET.tar.gz"
+    $DOWNLOAD_URL = "https://github.com/$REPO/releases/download/v$VERSION/$ASSET_NAME"
 }
 
-if (-not $VERSION) {
-    Write-Err "Failed to determine latest version. Visit https://github.com/$REPO/releases"
-}
-
-$ASSET_NAME = "comobot-$VERSION-$TARGET.tar.gz"
-$DOWNLOAD_URL = "https://github.com/$REPO/releases/download/v$VERSION/$ASSET_NAME"
 Write-Info "Found comobot v$VERSION for $TARGET"
 
 # ── Download and extract ─────────────────────────────────────────────────────

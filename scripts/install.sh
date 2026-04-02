@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # Comobot Installer for macOS / Linux
-# Usage: curl -fsSL https://raw.githubusercontent.com/musenming/comobot/main/scripts/install.sh | bash
+#
+# Global users:
+#   curl -fsSL https://raw.githubusercontent.com/musenming/comobot/main/scripts/install.sh | bash
+#
+# China users (auto-detected, or explicit):
+#   curl -fsSL https://dl.comobot.cn/scripts/install.sh | bash
+#   COMOBOT_MIRROR=cn curl -fsSL https://raw.githubusercontent.com/musenming/comobot/main/scripts/install.sh | bash
 set -euo pipefail
 
 REPO="musenming/comobot"
@@ -8,12 +14,31 @@ INSTALL_DIR="$HOME/.comobot/bin"
 CLEANUP_DIR=""
 SHELL_RC=""
 
+# Mirror configuration
+CN_MIRROR_BASE="https://dl.comindx.com"
+GITHUB_MIRROR_BASE="https://github.com/$REPO"
+MIRROR="${COMOBOT_MIRROR:-}"   # "cn" | "github" | "" (auto-detect)
+
 # ── Colours ───────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 info()    { echo -e "${BLUE}[comobot]${NC} $*"; }
 success() { echo -e "${GREEN}[comobot]${NC} $*"; }
 warn()    { echo -e "${YELLOW}[comobot]${NC} $*"; }
 error()   { echo -e "${RED}[comobot]${NC} $*" >&2; exit 1; }
+
+# ── Mirror auto-detection ─────────────────────────────────────────────────────
+detect_mirror() {
+    if [[ "$MIRROR" == "cn" || "$MIRROR" == "github" ]]; then
+        return  # user explicit, skip detection
+    fi
+    # Try GitHub with a short timeout; fall back to CN mirror on failure
+    if ! curl -fsSI --connect-timeout 4 --max-time 5 "https://github.com" &>/dev/null; then
+        warn "GitHub is unreachable, switching to CN mirror automatically."
+        MIRROR="cn"
+    else
+        MIRROR="github"
+    fi
+}
 
 # ── Platform detection ────────────────────────────────────────────────────────
 detect_platform() {
@@ -37,10 +62,19 @@ detect_platform() {
     info "Detected platform: $TARGET"
 }
 
-# ── Fetch latest release URL ─────────────────────────────────────────────────
-get_download_url() {
-    info "Fetching latest release info..."
+# ── Fetch latest release info (CN mirror) ────────────────────────────────────
+_get_version_cn() {
+    VERSION=$(curl -fsSL --connect-timeout 8 "$CN_MIRROR_BASE/releases/latest/version.txt" \
+        2>/dev/null | tr -d '[:space:]') || true
+    if [[ -z "$VERSION" ]]; then
+        error "Failed to fetch version from CN mirror ($CN_MIRROR_BASE). Please retry later."
+    fi
+    ASSET_NAME="comobot-${VERSION}-${TARGET}.tar.gz"
+    DOWNLOAD_URL="$CN_MIRROR_BASE/releases/v${VERSION}/${ASSET_NAME}"
+}
 
+# ── Fetch latest release info (GitHub) ───────────────────────────────────────
+_get_version_github() {
     # Primary: resolve version via GitHub redirect (no API, no rate limit)
     local redirect_url
     redirect_url=$(curl -fsSI "https://github.com/$REPO/releases/latest" 2>/dev/null \
@@ -67,7 +101,16 @@ get_download_url() {
 
     ASSET_NAME="comobot-${VERSION}-${TARGET}.tar.gz"
     DOWNLOAD_URL="https://github.com/$REPO/releases/download/v${VERSION}/${ASSET_NAME}"
+}
 
+# ── Fetch latest release URL ─────────────────────────────────────────────────
+get_download_url() {
+    info "Fetching latest release info..."
+    if [[ "$MIRROR" == "cn" ]]; then
+        _get_version_cn
+    else
+        _get_version_github
+    fi
     info "Found comobot v${VERSION} for ${TARGET}"
 }
 
@@ -189,6 +232,7 @@ main() {
     info "Comobot Installer"
     echo ""
 
+    detect_mirror
     detect_platform
     get_download_url
     install_binary
