@@ -16,6 +16,9 @@ jobs:
           - os: ubuntu-latest
             target: linux-x64
             binary_glob: comobot*
+          - os: ubuntu-24.04-arm
+            target: linux-arm64
+            binary_glob: comobot*
           - os: macos-latest
             target: macos-arm64
             binary_glob: comobot*
@@ -124,7 +127,7 @@ jobs:
           echo "asset=$ASSET" >> "$GITHUB_OUTPUT"
 
       - name: Upload packaged artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: release-${{ matrix.target }}
           path: ${{ steps.package.outputs.asset }}
@@ -161,7 +164,7 @@ jobs:
 
       # Persist dist/ artifacts so sync-cn-mirror can access them
       - name: Upload dist for CN sync
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: release-dist
           path: dist/

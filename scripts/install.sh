@@ -5,7 +5,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/musenming/comobot/main/scripts/install.sh | bash
 #
 # China users (auto-detected, or explicit):
-#   curl -fsSL https://dl.comobot.cn/scripts/install.sh | bash
+#   curl -fsSL https://dl.comindx.com/scripts/install.sh | bash
 #   COMOBOT_MIRROR=cn curl -fsSL https://raw.githubusercontent.com/musenming/comobot/main/scripts/install.sh | bash
 set -euo pipefail
 
@@ -197,6 +197,8 @@ verify() {
         local ver
         ver=$(comobot --version 2>/dev/null || echo "$VERSION")
         success "Comobot installed successfully! Version: $ver"
+        # Report install stat (silent, non-blocking)
+        curl -fsS "https://dl.comindx.com/ping?v=${VERSION}&p=${TARGET}" -o /dev/null 2>/dev/null &
         echo ""
         # Run onboard to generate config if not exists
         if [[ ! -f "$HOME/.comobot/config.json" ]]; then

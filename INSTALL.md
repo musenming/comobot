@@ -10,48 +10,61 @@
 
 ### 方式一：脚本一键安装（Mac / Linux）
 
-在终端粘贴一条命令，自动完成所有依赖安装、服务启动，并在浏览器打开配置向导：
+脚本自动检测网络环境，国内用户自动切换至 `dl.comindx.com` 镜像下载，无需手动选择。
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/musenming/comobot-install/main/scripts/install.sh | sh)"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/musenming/comobot/main/scripts/install.sh)"
 ```
 
-**系统要求**：macOS 12+（Monterey）或 Ubuntu 20.04+ / CentOS 8+，需要联网
+**国内用户**（GitHub 不可达时可直接使用镜像）：
+
+```bash
+/bin/bash -c "$(curl -fsSL https://dl.comindx.com/scripts/install.sh)"
+```
+
+**系统要求**：macOS 12+（Monterey）或 Ubuntu 20.04+ / Debian 11+，需要联网
 
 脚本会自动完成：
-1. 安装 Homebrew（macOS）/ 使用 apt/yum（Linux）
-2. 安装 Python 3.11 和 Node.js 18
-3. 下载最新 Release 并解压到 `~/Applications/comobot/`（macOS）或 `~/.local/comobot/`（Linux）
-4. 创建虚拟环境并安装 Python 依赖
-5. 构建前端静态资源
-6. 配置开机自启（macOS LaunchAgent / Linux systemd）
-7. 在桌面创建快捷方式
-8. 启动服务，打开浏览器 `http://localhost:18790`
+1. 检测平台（linux-x64 / linux-arm64 / macos-arm64）
+2. 从 GitHub Releases 或国内镜像下载对应预编译二进制包
+3. 安装到 `~/.comobot/bin/comobot`，并写入 PATH
+4. 首次运行 `comobot onboard` 完成初始化配置
+
+安装完成后启动服务：
+
+```bash
+comobot gateway
+```
 
 ---
 
 ### 方式二：脚本一键安装（Windows）
 
-**方法 A**：PowerShell（推荐，Win10 1903+ / Win11）
+以管理员身份打开 PowerShell，粘贴以下命令：
 
 ```powershell
 irm https://raw.githubusercontent.com/musenming/comobot/main/scripts/install.ps1 | iex
 ```
 
-**方法 B**：下载 `install.bat`，右键 → 以管理员身份运行
+**国内用户**：
 
+```powershell
+irm https://dl.comindx.com/scripts/install.ps1 | iex
 ```
-https://raw.githubusercontent.com/musenming/comobot/main/scripts/install.bat
-```
+
+**系统要求**：Windows 10 1903+ / Windows 11，PowerShell 5.1+
 
 脚本会自动完成：
-1. 用 `winget` 安装 Python 3.11 和 Node.js 20.19+ or 22.12+
-2. 下载最新 Release 并解压到 `%APPDATA%\comobot\`
-3. 创建虚拟环境并安装依赖
-4. 构建前端静态资源
-5. 注册开机启动项（注册表）
-6. 在桌面创建快捷方式（`.lnk`）
-7. 启动服务，打开浏览器 `http://localhost:18790`
+1. 检测平台（windows-x64）
+2. 从 GitHub Releases 或国内镜像下载预编译二进制包
+3. 安装到 `%LOCALAPPDATA%\comobot\bin\comobot.exe`，并写入用户 PATH
+4. 首次运行 `comobot onboard` 完成初始化配置
+
+安装完成后启动服务：
+
+```powershell
+comobot gateway
+```
 
 ---
 
@@ -59,14 +72,14 @@ https://raw.githubusercontent.com/musenming/comobot/main/scripts/install.bat
 
 **前提**：已安装 [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 
-**macOS**：下载 `comobot-docker.zip`，解压后双击 `start.command`
+从 GitHub Releases 下载 `comobot-docker.zip`，解压后：
 
-**Windows**：下载 `comobot-docker.zip`，解压后双击 `start.bat`
+- **macOS**：双击 `start.command`
+- **Windows**：双击 `start.bat`
 
 或者手动执行：
 
 ```bash
-# 下载编排文件
 curl -fsSL https://github.com/musenming/comobot/releases/latest/download/comobot-docker.zip -o comobot-docker.zip
 unzip comobot-docker.zip && cd comobot-docker
 
@@ -75,11 +88,9 @@ docker compose up -d
 
 # 查看运行状态
 docker compose ps
-
-# 打开浏览器完成向导
-open http://localhost:18790   # macOS
-# 或手动访问 http://localhost:18790
 ```
+
+打开浏览器访问 `http://localhost:18790` 完成向导。
 
 数据持久化在 Docker Volume `comobot-data`，重启/升级均不丢失。
 
@@ -108,10 +119,8 @@ cd web && npm install && npm run build && cd ..
 
 # 启动
 comobot gateway
-
-# 重启
-comobot gateway restart
 ```
 
 ---
+
 

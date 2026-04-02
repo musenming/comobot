@@ -4,7 +4,7 @@
 #   irm https://raw.githubusercontent.com/musenming/comobot/main/scripts/install.ps1 | iex
 #
 # China users (auto-detected, or explicit):
-#   irm https://dl.comobot.cn/scripts/install.ps1 | iex
+#   irm https://dl.comindx.com/scripts/install.ps1 | iex
 #   $env:COMOBOT_MIRROR="cn"; irm https://raw.githubusercontent.com/musenming/comobot/main/scripts/install.ps1 | iex
 #Requires -Version 5.1
 Set-StrictMode -Version Latest
@@ -150,6 +150,11 @@ if (Test-Path $comobotExe) {
     } catch {
         Write-OK "Comobot installed successfully! Version: $VERSION"
     }
+    # Report install stat (silent, non-blocking)
+    Start-Job -ScriptBlock {
+        param($v, $p)
+        try { Invoke-WebRequest -Uri "https://dl.comindx.com/ping?v=$v&p=$p" -UseBasicParsing -TimeoutSec 5 | Out-Null } catch {}
+    } -ArgumentList $VERSION, $TARGET | Out-Null
 
     # Run onboard to generate config if not exists
     $configFile = Join-Path $DATA_DIR "config.json"

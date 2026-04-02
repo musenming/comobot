@@ -1963,10 +1963,21 @@ def _ssl_context():
 
 
 def _fetch_latest_version() -> str | None:
-    """Fetch the latest release version from GitHub."""
+    """Fetch the latest release version, trying CN mirror first then GitHub API."""
     import json as _json
     import urllib.request
 
+    # Try CN mirror first (version.txt, fast for mainland China)
+    try:
+        cn_url = "https://dl.comindx.com/releases/latest/version.txt"
+        with urllib.request.urlopen(cn_url, timeout=6, context=_ssl_context()) as resp:
+            version = resp.read().decode().strip()
+        if version:
+            return version
+    except Exception:
+        pass
+
+    # Fallback: GitHub API
     repo = "musenming/comobot"
     url = f"https://api.github.com/repos/{repo}/releases/latest"
     try:
@@ -1985,7 +1996,6 @@ def _update_binary(version: str) -> None:
     import tarfile
     import tempfile
     import urllib.request
-    import zipfile
 
     repo = "musenming/comobot"
     install_dir = Path.home() / ".comobot" / "bin"
@@ -2015,36 +2025,36 @@ def _update_binary(version: str) -> None:
     target = f"{plat}-{arch}"
     console.print(f"  Platform: [cyan]{target}[/cyan]")
 
-    if plat == "windows":
-        asset_name = f"comobot-{version}-{target}.zip"
-    else:
-        asset_name = f"comobot-{version}-{target}.tar.gz"
-    download_url = f"https://github.com/{repo}/releases/download/v{version}/{asset_name}"
+    asset_name = f"comobot-{version}-{target}.tar.gz"
+    github_url = f"https://github.com/{repo}/releases/download/v{version}/{asset_name}"
+    cn_url = f"https://dl.comindx.com/releases/v{version}/{asset_name}"
 
-    # Download
+    # Download — try CN mirror first, fallback to GitHub
     console.print(f"  Downloading [cyan]{asset_name}[/cyan]...")
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
         archive_path = tmp_path / asset_name
 
-        try:
-            req = urllib.request.Request(download_url)
-            with urllib.request.urlopen(req, context=_ssl_context()) as resp:
-                archive_path.write_bytes(resp.read())
-        except Exception as exc:
-            console.print(f"[red]Download failed: {exc}[/red]")
+        downloaded = False
+        for label, url in [("CN mirror", cn_url), ("GitHub", github_url)]:
+            try:
+                req = urllib.request.Request(url)
+                with urllib.request.urlopen(req, timeout=30, context=_ssl_context()) as resp:
+                    archive_path.write_bytes(resp.read())
+                downloaded = True
+                break
+            except Exception as exc:
+                console.print(f"  [dim]{label} failed: {exc}, trying next...[/dim]")
+        if not downloaded:
+            console.print("[red]Download failed from all sources.[/red]")
             raise typer.Exit(1)
 
         # Extract
         console.print("  Extracting...")
-        if asset_name.endswith(".tar.gz"):
-            with tarfile.open(archive_path, "r:gz") as tar:
-                tar.extractall(tmp_path)
-            new_binary = tmp_path / "comobot" / "comobot"
-        else:
-            with zipfile.ZipFile(archive_path, "r") as zf:
-                zf.extractall(tmp_path)
-            new_binary = tmp_path / "comobot" / "comobot.exe"
+        with tarfile.open(archive_path, "r:gz") as tar:
+            tar.extractall(tmp_path)
+        binary_name = "comobot.exe" if plat == "windows" else "comobot"
+        new_binary = tmp_path / "comobot" / binary_name
 
         if not new_binary.exists():
             console.print("[red]Unexpected archive structure.[/red]")
